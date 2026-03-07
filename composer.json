@@ -83,17 +83,6 @@
             }
         }
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../../Core/php-agents",
-            "options": {
-                "versions": {
-                    "carmelosantana/php-agents": "0.8.99"
-                }
-            }
-        }
-    ],
     "minimum-stability": "dev",
     "prefer-stable": true
 }
