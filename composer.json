@@ -1,0 +1,99 @@
+{
+    "name": "coquibot/coqui-space-manager",
+    "description": "Coqui Space integration — discover, install, and manage skills and toolkits from coqui.space",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Carmelo Santana"
+        }
+    ],
+    "keywords": [
+        "php-agents",
+        "coqui",
+        "coqui-space",
+        "skills",
+        "toolkits",
+        "marketplace"
+    ],
+    "require": {
+        "php": "^8.4",
+        "ext-json": "*",
+        "ext-zip": "*",
+        "symfony/http-client": "^7.0"
+    },
+    "require-dev": {
+        "carmelosantana/php-agents": "^0.8",
+        "pestphp/pest": "^3.0",
+        "phpstan/phpstan": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "CoquiBot\\SpaceManager\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CoquiBot\\SpaceManager\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "analyse": "phpstan analyse"
+    },
+    "extra": {
+        "php-agents": {
+            "toolkits": [
+                "CoquiBot\\SpaceManager\\SpaceManagerToolkit"
+            ],
+            "description": "Discover, install, and manage skills and toolkits from Coqui Space",
+            "credentials": {
+                "COQUI_SPACE_API_TOKEN": {
+                    "description": "API token for coqui.space — enables starring, publishing, and managing your content. Generate one at https://coqui.space/dashboard/api-keys",
+                    "optional": true
+                },
+                "COQUI_SPACE_URL": {
+                    "description": "Override the Coqui Space API base URL (default: https://coqui.space/api/v1)",
+                    "optional": true
+                }
+            },
+            "gated": {
+                "space_skills": [
+                    {"action": "install"},
+                    {"action": "update"},
+                    {"action": "publish"}
+                ],
+                "space_toolkits": [
+                    {"action": "install"},
+                    {"action": "update"},
+                    {"action": "publish"}
+                ],
+                "space": [
+                    {"action": "disable"},
+                    {"action": "enable"},
+                    {"action": "remove"}
+                ]
+            }
+        }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../Core/php-agents",
+            "options": {
+                "versions": {
+                    "carmelosantana/php-agents": "0.8.99"
+                }
+            }
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
