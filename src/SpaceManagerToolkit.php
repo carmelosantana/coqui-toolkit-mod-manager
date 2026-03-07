@@ -113,8 +113,8 @@ final class SpaceManagerToolkit implements ToolkitInterface
         | Tool | Purpose | Key actions |
         |------|---------|-------------|
         | `space_skills` | Browse and install skills | search, list, details, versions, reviews, file, install, update, publish |
-        | `space_toolkits` | Browse and install toolkits | search, popular, details, reviews, install, update, publish |
-        | `space` | Manage installed content & social actions | installed, disable, enable, remove, star, unstar, submit |
+        | `space_toolkits` | Browse and install toolkits | search, list, popular, details, reviews, install, update, publish |
+        | `space` | Manage installed content, discover tags, unified search & social actions | installed, disable, enable, remove, star, unstar, submit, tags, search_all |
 
         ### Identifier patterns
 
@@ -128,7 +128,7 @@ final class SpaceManagerToolkit implements ToolkitInterface
         - `publish` (both skills and toolkits)
         - `me` (profile info)
 
-        Anonymous access supports: search, details, list, versions, reviews, install, update.
+        Anonymous access supports: search, details, list, versions, reviews, install, update, tags, search_all.
 
         ### Workflow patterns
 
@@ -136,6 +136,13 @@ final class SpaceManagerToolkit implements ToolkitInterface
         1. `space_skills(action: "search", query: "code review")` or `space_toolkits(action: "search", query: "brave")`
         2. `space_skills(action: "details", owner: "carmelosantana", name: "code-review")` for full info
         3. `space_skills(action: "install", owner: "carmelosantana", name: "code-review")` to install
+
+        **Browse with tags:**
+        1. `space(action: "tags", type: "toolkits")` — discover available tags
+        2. `space_toolkits(action: "list", sort: "downloads", tags: "browser")` — filter by tag
+
+        **Unified search:**
+        1. `space(action: "search_all", query: "browser")` — search both skills and toolkits at once
 
         **Manage installed:**
         1. `space(action: "installed")` — see everything installed

