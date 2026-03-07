@@ -7,6 +7,7 @@ namespace CoquiBot\SpaceManager\Tool;
 use CarmeloSantana\PHPAgents\Contract\ToolInterface;
 use CarmeloSantana\PHPAgents\Tool\Parameter\BoolParameter;
 use CarmeloSantana\PHPAgents\Tool\Parameter\EnumParameter;
+use CarmeloSantana\PHPAgents\Tool\Parameter\NumberParameter;
 use CarmeloSantana\PHPAgents\Tool\Parameter\StringParameter;
 use CarmeloSantana\PHPAgents\Tool\ToolResult;
 use CoquiBot\SpaceManager\Api\SpaceClient;
@@ -37,7 +38,9 @@ final class SpaceManageTool implements ToolInterface
             . 'Actions: installed (list all installed content), disable (deactivate without removing), '
             . 'enable (reactivate disabled content), remove (uninstall), '
             . 'star/unstar (community feedback — requires auth), '
-            . 'submit (submit a URL for review on coqui.space).';
+            . 'submit (submit a URL for review on coqui.space), '
+            . 'tags (discover available tags for filtering), '
+            . 'search_all (unified search across skills and toolkits).';
     }
 
     public function parameters(): array
@@ -46,15 +49,18 @@ final class SpaceManageTool implements ToolInterface
             new EnumParameter(
                 'action',
                 'The operation to perform',
-                ['installed', 'disable', 'enable', 'remove', 'star', 'unstar', 'submit'],
+                ['installed', 'disable', 'enable', 'remove', 'star', 'unstar', 'submit', 'tags', 'search_all'],
             ),
             new StringParameter('name', 'Content identifier: skill directory name for skills, vendor/package for toolkits. Auto-detected by "/" presence.', required: false),
-            new EnumParameter('type', 'Content type filter or submission type', ['all', 'skills', 'toolkits', 'skill', 'toolkit'], required: false),
+            new EnumParameter('type', 'Content type filter (for installed/tags)', ['all', 'skills', 'toolkits', 'skill', 'toolkit'], required: false),
             new EnumParameter('entity_type', 'Entity type for star/unstar', ['skill', 'toolkit'], required: false),
             new StringParameter('owner', 'GitHub username (required for star/unstar)', required: false),
             new StringParameter('source_url', 'Repository or source URL (required for submit)', required: false),
             new StringParameter('notes', 'Additional notes for submission', required: false),
             new BoolParameter('purge', 'Permanently delete when removing (default: false — just disables)', required: false),
+            new StringParameter('query', 'Search keywords (required for search_all)', required: false),
+            new NumberParameter('limit', 'Maximum results for search_all (1-50, default 10)', required: false),
+            new StringParameter('cursor', 'Pagination cursor for search_all (applies to skill results only)', required: false),
         ];
     }
 
@@ -71,7 +77,9 @@ final class SpaceManageTool implements ToolInterface
                 'star' => $this->star($input),
                 'unstar' => $this->unstar($input),
                 'submit' => $this->submit($input),
-                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: installed, disable, enable, remove, star, unstar, submit"),
+                'tags' => $this->tags($input),
+                'search_all' => $this->searchAll($input),
+                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: installed, disable, enable, remove, star, unstar, submit, tags, search_all"),
             };
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage());
@@ -304,6 +312,126 @@ final class SpaceManageTool implements ToolInterface
             . "A moderator will review your {$type} at `{$sourceUrl}`. "
             . 'You can track the status from your dashboard on coqui.space.',
         );
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function tags(array $input): ToolResult
+    {
+        $type = (string) ($input['type'] ?? 'all');
+
+        // Normalize type to the API expected values
+        $apiType = match ($type) {
+            'skill', 'skills' => 'skills',
+            'toolkit', 'toolkits' => 'toolkits',
+            default => 'all',
+        };
+
+        $data = $this->client->getTags($apiType);
+
+        $skillTags = (array) ($data['skills'] ?? []);
+        $toolkitTags = (array) ($data['toolkits'] ?? []);
+
+        $lines = ['## Available Tags'];
+
+        if ($apiType === 'all' || $apiType === 'skills') {
+            $lines[] = '';
+            $lines[] = '### Skill Tags';
+            if ($skillTags === []) {
+                $lines[] = 'No skill tags available.';
+            } else {
+                $slugs = array_map(static fn(array $tag): string => (string) ($tag['slug'] ?? $tag['name'] ?? ''), $skillTags);
+                $lines[] = implode(', ', array_filter($slugs));
+            }
+        }
+
+        if ($apiType === 'all' || $apiType === 'toolkits') {
+            $lines[] = '';
+            $lines[] = '### Toolkit Tags';
+            if ($toolkitTags === []) {
+                $lines[] = 'No toolkit tags available.';
+            } else {
+                $slugs = array_map(static fn(array $tag): string => (string) ($tag['slug'] ?? $tag['name'] ?? ''), $toolkitTags);
+                $lines[] = implode(', ', array_filter($slugs));
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = '*Use tags to filter results: `space_skills(action: "list", tags: "tag-slug")` or `space_toolkits(action: "list", tags: "tag-slug")`*';
+
+        return ToolResult::success(implode("\n", $lines));
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function searchAll(array $input): ToolResult
+    {
+        $query = (string) ($input['query'] ?? '');
+        if ($query === '') {
+            return ToolResult::error('Parameter "query" is required for search_all.');
+        }
+
+        $limit = (int) ($input['limit'] ?? 10);
+        $cursor = isset($input['cursor']) ? (string) $input['cursor'] : null;
+
+        $data = $this->client->searchAll($query, $limit, $cursor);
+
+        $skillResults = (array) ($data['skills']['results'] ?? []);
+        $toolkitResults = (array) ($data['toolkits']['results'] ?? []);
+        $toolkitTotal = (int) ($data['toolkits']['total'] ?? count($toolkitResults));
+
+        if ($skillResults === [] && $toolkitResults === []) {
+            return ToolResult::success("No results found for \"{$query}\".");
+        }
+
+        $lines = ["## Search results for \"{$query}\"\n"];
+
+        // Skills section
+        $lines[] = '### Skills';
+        if ($skillResults === []) {
+            $lines[] = 'No matching skills.';
+        } else {
+            $lines[] = '';
+            $lines[] = '| Skill | Owner | Version | Verified |';
+            $lines[] = '|-------|-------|---------|----------|';
+
+            foreach ($skillResults as $item) {
+                $name = (string) ($item['name'] ?? '');
+                $displayName = (string) ($item['displayName'] ?? $name);
+                $owner = (string) ($item['owner'] ?? '');
+                $version = (string) ($item['version'] ?? '-');
+                $verified = !empty($item['verified_publisher']) ? '✓' : '—';
+
+                $lines[] = "| {$displayName} (`{$owner}/{$name}`) | {$owner} | {$version} | {$verified} |";
+            }
+        }
+
+        // Toolkits section
+        $lines[] = '';
+        $lines[] = "### Toolkits ({$toolkitTotal} total)";
+        if ($toolkitResults === []) {
+            $lines[] = 'No matching toolkits.';
+        } else {
+            $lines[] = '';
+            $lines[] = '| Package | Downloads | Favers | Verified |';
+            $lines[] = '|---------|-----------|--------|----------|';
+
+            foreach ($toolkitResults as $item) {
+                $name = (string) ($item['name'] ?? '');
+                $downloads = (int) ($item['downloads'] ?? 0);
+                $favers = (int) ($item['favers'] ?? 0);
+                $verified = !empty($item['verified_publisher']) ? '✓' : '—';
+
+                $lines[] = "| `{$name}` | {$downloads} | {$favers} | {$verified} |";
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = '*Use entity-specific tools for more details and pagination.*';
+
+        return ToolResult::success(implode("\n", $lines));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

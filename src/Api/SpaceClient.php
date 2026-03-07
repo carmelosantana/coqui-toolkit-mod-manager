@@ -198,6 +198,28 @@ final class SpaceClient
     // ── Toolkits ─────────────────────────────────────────────────────
 
     /**
+     * List published toolkits with cursor-based pagination.
+     *
+     * @return array<string, mixed>
+     */
+    public function listToolkits(
+        string $sort = 'downloads',
+        ?string $tags = null,
+        int $limit = 20,
+        ?string $cursor = null,
+    ): array {
+        $params = ['sort' => $sort, 'limit' => $limit];
+        if ($tags !== null) {
+            $params['tags'] = $tags;
+        }
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
+
+        return $this->get('/toolkits', $params);
+    }
+
+    /**
      * Search toolkits (Packagist-style endpoint).
      *
      * @return array<string, mixed>
@@ -343,6 +365,44 @@ final class SpaceClient
         }
 
         return $this->post('/submissions', $data);
+    }
+
+    // ── Tags ─────────────────────────────────────────────────────────
+
+    /**
+     * Get available tags for skills and/or toolkits.
+     *
+     * @param string $type Filter: 'all', 'skills', or 'toolkits'
+     * @return array<string, mixed>
+     */
+    public function getTags(string $type = 'all'): array
+    {
+        $params = [];
+        if ($type !== 'all') {
+            $params['type'] = $type;
+        }
+
+        return $this->get('/tags', $params);
+    }
+
+    // ── Unified Search ───────────────────────────────────────────────
+
+    /**
+     * Search both skills and toolkits in a single request.
+     *
+     * Note: The cursor parameter only applies to skill results on the server side.
+     * Toolkit results always return page 1.
+     *
+     * @return array<string, mixed>
+     */
+    public function searchAll(string $query, int $limit = 10, ?string $cursor = null): array
+    {
+        $params = ['q' => $query, 'limit' => $limit];
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
+
+        return $this->get('/search/all', $params);
     }
 
     // ── HTTP primitives ──────────────────────────────────────────────

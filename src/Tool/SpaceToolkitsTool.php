@@ -33,7 +33,8 @@ final class SpaceToolkitsTool implements ToolInterface
     public function description(): string
     {
         return 'Discover, install, and manage Composer toolkits from Coqui Space. '
-            . 'Actions: search (keyword search), popular (browse popular toolkits), '
+            . 'Actions: search (keyword search), list (browse with sorting/tags — cursor-paginated), '
+            . 'popular (browse popular — page-based, legacy), '
             . 'details (full metadata by package name or owner/name), '
             . 'reviews (community reviews), install (composer require into workspace), '
             . 'update (composer update), publish (register toolkit on coqui.space).';
@@ -45,7 +46,7 @@ final class SpaceToolkitsTool implements ToolInterface
             new EnumParameter(
                 'action',
                 'The operation to perform',
-                ['search', 'popular', 'details', 'reviews', 'install', 'update', 'publish'],
+                ['search', 'list', 'popular', 'details', 'reviews', 'install', 'update', 'publish'],
             ),
             new StringParameter('query', 'Search keywords (required for search)', required: false),
             new StringParameter('package', 'Full Composer package name in vendor/package format (for details/install/update/publish)', required: false),
@@ -55,11 +56,13 @@ final class SpaceToolkitsTool implements ToolInterface
             new StringParameter('description', 'Description for publishing', required: false),
             new StringParameter('repository', 'Repository URL for publishing', required: false),
             new StringParameter('tags', 'Comma-separated tags for publishing', required: false),
+            new EnumParameter('sort', 'Sort order for list', ['downloads', 'favers', 'newest', 'name'], required: false),
+            new StringParameter('tags', 'Comma-separated tag slugs to filter by (for list)', required: false),
             new NumberParameter('per_page', 'Results per page for search/popular (1-100, default 15)', required: false),
             new NumberParameter('page', 'Page number for search/popular (default 1)', required: false),
             new StringParameter('version', 'Version constraint for install (e.g. ^1.0)', required: false),
-            new NumberParameter('limit', 'Maximum results for reviews (default 10)', required: false),
-            new StringParameter('cursor', 'Pagination cursor for reviews', required: false),
+            new NumberParameter('limit', 'Maximum results (1-100 for list, 1-10 for reviews)', required: false),
+            new StringParameter('cursor', 'Pagination cursor for list/reviews', required: false),
         ];
     }
 
@@ -70,13 +73,14 @@ final class SpaceToolkitsTool implements ToolInterface
         try {
             return match ($action) {
                 'search' => $this->search($input),
+                'list' => $this->listToolkits($input),
                 'popular' => $this->popular($input),
                 'details' => $this->details($input),
                 'reviews' => $this->reviews($input),
                 'install' => $this->install($input),
                 'update' => $this->update($input),
                 'publish' => $this->publish($input),
-                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, popular, details, reviews, install, update, publish"),
+                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, popular, details, reviews, install, update, publish"),
             };
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage());
@@ -110,6 +114,51 @@ final class SpaceToolkitsTool implements ToolInterface
     }
 
     // ── Actions ──────────────────────────────────────────────────────
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function listToolkits(array $input): ToolResult
+    {
+        $sort = (string) ($input['sort'] ?? 'downloads');
+        $tags = isset($input['tags']) ? (string) $input['tags'] : null;
+        $limit = (int) ($input['limit'] ?? 20);
+        $cursor = isset($input['cursor']) ? (string) $input['cursor'] : null;
+
+        $data = $this->client->listToolkits($sort, $tags, $limit, $cursor);
+        $items = $data['items'] ?? [];
+
+        if ($items === []) {
+            return ToolResult::success('No toolkits found.');
+        }
+
+        $lines = ["## Toolkits (sorted by {$sort})\n"];
+        $lines[] = '| Package | Owner | Downloads | Favers | Tags | Verified |';
+        $lines[] = '|---------|-------|-----------|--------|------|----------|';
+
+        foreach ($items as $item) {
+            $name = (string) ($item['packageName'] ?? $item['name'] ?? '');
+            $owner = SpaceRegistry::extractOwner($item);
+            $downloads = $this->formatNumber((int) ($item['downloads'] ?? 0));
+            $favers = $this->formatNumber((int) ($item['favers'] ?? 0));
+            $verified = !empty($item['verified_publisher']) ? '✓' : '—';
+            $itemTags = (array) ($item['tags'] ?? []);
+            $tagStr = $itemTags !== [] ? implode(', ', array_slice($itemTags, 0, 3)) : '—';
+
+            $lines[] = "| `{$name}` | {$owner} | {$downloads} | {$favers} | {$tagStr} | {$verified} |";
+        }
+
+        $nextCursor = $data['nextCursor'] ?? null;
+        if ($nextCursor !== null) {
+            $lines[] = '';
+            $lines[] = "*More results available — use `cursor: \"{$nextCursor}\"` for the next page.*";
+        }
+
+        $lines[] = '';
+        $lines[] = '*Use `space_toolkits(action: "details", package: "vendor/package")` to see full details.*';
+
+        return ToolResult::success(implode("\n", $lines));
+    }
 
     /**
      * @param array<string, mixed> $input

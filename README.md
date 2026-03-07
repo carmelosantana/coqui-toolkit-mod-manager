@@ -48,6 +48,7 @@ The toolkit provides three tools, grouped by entity type:
 | Action | Parameters | Description |
 |--------|-----------|-------------|
 | `search` | `query`, `limit?`, `page?` | Search toolkits by keyword |
+| `list` | `limit?`, `cursor?`, `sort?`, `tags?` | Browse all toolkits with cursor pagination |
 | `popular` | `limit?`, `page?` | Browse popular toolkits |
 | `details` | `owner`, `name` or `package` | Full toolkit information |
 | `reviews` | `owner`, `name` | Community reviews |
@@ -66,6 +67,8 @@ The toolkit provides three tools, grouped by entity type:
 | `star` | `entity_type`, `owner`, `name` | Star a skill or toolkit |
 | `unstar` | `entity_type`, `owner`, `name` | Remove a star |
 | `submit` | `type`, `source_url`, `notes?` | Submit a URL for review |
+| `tags` | `type?` (all/skills/toolkits) | Browse available tags |
+| `search_all` | `query`, `limit?`, `cursor?` | Unified search across skills and toolkits |
 
 **Identifier convention:** Names containing `/` are treated as toolkits (Composer packages). Names without `/` are treated as skills (directory names).
 
@@ -131,8 +134,8 @@ src/
 │   └── ToolkitInstaller.php     # Toolkit lifecycle (Composer-based)
 ├── Tool/
 │   ├── SpaceSkillsTool.php      # space_skills tool (9 actions)
-│   ├── SpaceToolkitsTool.php    # space_toolkits tool (7 actions)
-│   └── SpaceManageTool.php      # space tool (7 actions)
+│   ├── SpaceToolkitsTool.php    # space_toolkits tool (8 actions)
+│   └── SpaceManageTool.php      # space tool (9 actions)
 └── SpaceManagerToolkit.php      # ToolkitInterface entry point
 ```
 
