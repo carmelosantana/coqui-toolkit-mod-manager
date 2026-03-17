@@ -14,7 +14,7 @@ The toolkit is auto-discovered by Coqui via `extra.php-agents.toolkits` in `comp
 
 | Key | Required | Description |
 |-----|----------|-------------|
-| `COQUI_SPACE_API_TOKEN` | Optional | API token from coqui.space — enables starring, publishing, and submissions |
+| `COQUI_SPACE_API_TOKEN` | Optional | API token from coqui.space — enables starring, publishing, account dashboard, collections, reviews, and submissions |
 | `COQUI_SPACE_URL` | Optional | Custom API base URL (default: `https://coqui.space/api/v1`) |
 
 Set credentials via the Coqui `credentials` tool:
@@ -23,11 +23,11 @@ Set credentials via the Coqui `credentials` tool:
 credentials(action: "set", key: "COQUI_SPACE_API_TOKEN", value: "cqs_...")
 ```
 
-Most read operations work without authentication. Authentication is required for: `star`, `unstar`, `submit`, `publish`.
+Most read operations work without authentication. Authentication is required for: `star`, `unstar`, `submit`, `publish`, `delete`, `review`, `collections` (create/update/delete), `notifications`, and all `space_account` actions.
 
 ## Tools
 
-The toolkit provides three tools, grouped by entity type:
+The toolkit provides three tools (four when authenticated), grouped by entity type:
 
 ### `space_skills` — Skill Discovery & Installation
 
@@ -42,6 +42,8 @@ The toolkit provides three tools, grouped by entity type:
 | `install` | `owner`, `name`, `version?`, `force?` | Download and install a skill |
 | `update` | `name` | Update an installed skill to latest |
 | `publish` | `name`, `description?`, `tags?` | Publish a local skill to coqui.space |
+| `delete` | `owner`, `name` | Delete a skill (soft-delete to draft) |
+| `log_install` | `owner`, `name` | Log an install event for analytics |
 
 ### `space_toolkits` — Toolkit Discovery & Installation
 
@@ -55,6 +57,7 @@ The toolkit provides three tools, grouped by entity type:
 | `install` | `package`, `version?` | Install via Composer |
 | `update` | `package` | Update via Composer |
 | `publish` | `package`, `description?`, `tags?` | Publish a toolkit to coqui.space |
+| `delete` | `owner`, `name` | Delete a toolkit (soft-delete to draft) |
 
 ### `space` — Management & Social
 
@@ -69,8 +72,27 @@ The toolkit provides three tools, grouped by entity type:
 | `submit` | `type`, `source_url`, `notes?` | Submit a URL for review |
 | `tags` | `type?` (all/skills/toolkits) | Browse available tags |
 | `search_all` | `query`, `limit?`, `cursor?` | Unified search across skills and toolkits |
+| `collections` | `sub_action`, `collection_id?`, `collection_name?`, `description?`, `is_public?`, `entity_type?`, `entity_id?` | Manage collections (sub_actions: list, create, details, update, delete, add_item, remove_item) |
+| `review` | `entity_type`, `owner`, `name`, `rating`, `title?`, `body?` | Post a review for a skill or toolkit |
+| `notifications` | `sub_action`, `notification_id?`, `unread?` | Manage notifications (sub_actions: list, mark_read, mark_all_read) |
+| `health` | — | Check API health status |
 
 **Identifier convention:** Names containing `/` are treated as toolkits (Composer packages). Names without `/` are treated as skills (directory names).
+
+### `space_account` — Account Dashboard (authenticated only)
+
+Only available when `COQUI_SPACE_API_TOKEN` is set.
+
+| Action | Parameters | Description |
+|--------|-----------|-------------|
+| `profile` | — | Your profile info (role, verified status) |
+| `my_skills` | `limit?`, `cursor?` | List your published skills |
+| `my_toolkits` | — | List your published toolkits |
+| `my_collections` | — | List your collections |
+| `my_submissions` | — | List your submissions |
+| `my_installs` | `limit?`, `cursor?` | Install activity log |
+| `my_analytics` | `days?` | Download/star analytics with daily chart |
+| `my_stars` | `limit?`, `cursor?` | Your starred items |
 
 ## Standalone Usage
 
@@ -104,9 +126,9 @@ echo $result->content;
 
 The following operations require user confirmation (unless `--auto-approve` is enabled):
 
-- `space_skills`: install, update, publish
-- `space_toolkits`: install, update, publish
-- `space`: disable, enable, remove
+- `space_skills`: install, update, publish, delete
+- `space_toolkits`: install, update, publish, delete
+- `space`: disable, enable, remove, submit, review, collections (create/update/delete/add_item/remove_item)
 
 ## Development
 
@@ -133,9 +155,10 @@ src/
 │   ├── SkillInstaller.php       # Skill lifecycle (ZIP download/extract)
 │   └── ToolkitInstaller.php     # Toolkit lifecycle (Composer-based)
 ├── Tool/
-│   ├── SpaceSkillsTool.php      # space_skills tool (9 actions)
-│   ├── SpaceToolkitsTool.php    # space_toolkits tool (8 actions)
-│   └── SpaceManageTool.php      # space tool (9 actions)
+│   ├── SpaceAccountTool.php     # space_account tool (8 actions, auth-only)
+│   ├── SpaceSkillsTool.php      # space_skills tool (11 actions)
+│   ├── SpaceToolkitsTool.php    # space_toolkits tool (9 actions)
+│   └── SpaceManageTool.php      # space tool (14 actions)
 └── SpaceManagerToolkit.php      # ToolkitInterface entry point
 ```
 

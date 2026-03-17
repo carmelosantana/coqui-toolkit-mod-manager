@@ -9,6 +9,7 @@ use CoquiBot\SpaceManager\Api\SpaceClient;
 use CoquiBot\SpaceManager\Config\SpaceRegistry;
 use CoquiBot\SpaceManager\Installer\SkillInstaller;
 use CoquiBot\SpaceManager\Installer\ToolkitInstaller;
+use CoquiBot\SpaceManager\Tool\SpaceAccountTool;
 use CoquiBot\SpaceManager\Tool\SpaceManageTool;
 use CoquiBot\SpaceManager\Tool\SpaceSkillsTool;
 use CoquiBot\SpaceManager\Tool\SpaceToolkitsTool;
@@ -90,11 +91,17 @@ final class SpaceManagerToolkit implements ToolkitInterface
      */
     public function tools(): array
     {
-        return [
+        $tools = [
             new SpaceSkillsTool($this->client, $this->skillInstaller),
             new SpaceToolkitsTool($this->client, $this->toolkitInstaller),
             new SpaceManageTool($this->client, $this->skillInstaller, $this->toolkitInstaller),
         ];
+
+        if (($this->tokenResolver)() !== '') {
+            $tools[] = new SpaceAccountTool($this->client);
+        }
+
+        return $tools;
     }
 
     public function guidelines(): string
@@ -102,19 +109,23 @@ final class SpaceManagerToolkit implements ToolkitInterface
         $authenticated = ($this->tokenResolver)() !== '';
         $authStatus = $authenticated ? 'authenticated' : 'anonymous (limited functionality)';
 
+        $accountRow = $authenticated
+            ? "\n        | `space_account` | Your account dashboard | profile, my_skills, my_toolkits, my_collections, my_submissions, my_installs, my_analytics, my_stars |"
+            : '';
+
         return <<<GUIDELINES
         <space_manager>
         ## Coqui Space Manager
 
         API Status: {$authStatus}
 
-        ### Three tools — use the right one
+        ### Tools — use the right one
 
         | Tool | Purpose | Key actions |
         |------|---------|-------------|
-        | `space_skills` | Browse and install skills | search, list, details, versions, reviews, file, install, update, publish |
-        | `space_toolkits` | Browse and install toolkits | search, list, popular, details, reviews, install, update, publish |
-        | `space` | Manage installed content, discover tags, unified search & social actions | installed, disable, enable, remove, star, unstar, submit, tags, search_all |
+        | `space_skills` | Browse, install and manage skills | search, list, details, versions, reviews, file, install, update, publish, delete, log_install |
+        | `space_toolkits` | Browse, install and manage toolkits | search, list, popular, details, reviews, install, update, publish, delete |
+        | `space` | Manage content, collections, reviews, notifications, tags, unified search | installed, disable, enable, remove, star, unstar, submit, tags, search_all, collections, review, notifications, health |{$accountRow}
 
         ### Identifier patterns
 
@@ -124,31 +135,29 @@ final class SpaceManagerToolkit implements ToolkitInterface
 
         ### Authentication required for
 
-        - `star`, `unstar`, `submit`
-        - `publish` (both skills and toolkits)
-        - `me` (profile info)
-
-        Anonymous access supports: search, details, list, versions, reviews, install, update, tags, search_all.
+        - `star`, `unstar`, `submit`, `delete`, `publish`, `review`
+        - `collections` (create/update/delete/add_item/remove_item)
+        - `notifications`, `space_account` (all actions)
+        - Anonymous access: search, details, list, versions, reviews, install, update, tags, search_all, health
 
         ### Workflow patterns
 
         **Discover → Install:**
-        1. `space_skills(action: "search", query: "code review")` or `space_toolkits(action: "search", query: "brave")`
-        2. `space_skills(action: "details", owner: "carmelosantana", name: "code-review")` for full info
-        3. `space_skills(action: "install", owner: "carmelosantana", name: "code-review")` to install
+        1. `space_skills(action: "search", query: "code review")`
+        2. `space_skills(action: "details", owner: "carmelosantana", name: "code-review")`
+        3. `space_skills(action: "install", owner: "carmelosantana", name: "code-review")`
 
-        **Browse with tags:**
-        1. `space(action: "tags", type: "toolkits")` — discover available tags
-        2. `space_toolkits(action: "list", sort: "downloads", tags: "browser")` — filter by tag
+        **Collections:**
+        1. `space(action: "collections", sub_action: "create", collection_name: "My Favorites", description: "...", is_public: true)`
+        2. `space(action: "collections", sub_action: "add_item", collection_id: "abc", entity_type: "skill", owner: "carmelosantana", name: "code-review")`
 
-        **Unified search:**
-        1. `space(action: "search_all", query: "browser")` — search both skills and toolkits at once
+        **Reviews:**
+        1. `space(action: "review", entity_type: "skill", owner: "carmelosantana", name: "code-review", rating: 5, title: "Great!", body: "Works perfectly.")`
 
         **Manage installed:**
         1. `space(action: "installed")` — see everything installed
-        2. `space(action: "disable", name: "code-review")` — deactivate a skill
-        3. `space(action: "enable", name: "code-review")` — reactivate it
-        4. `space(action: "remove", name: "code-review", purge: true)` — fully remove
+        2. `space(action: "disable", name: "code-review")` — deactivate
+        3. `space(action: "remove", name: "code-review", purge: true)` — fully remove
 
         **Social:**
         1. `space(action: "star", entity_type: "skill", owner: "carmelosantana", name: "code-review")`

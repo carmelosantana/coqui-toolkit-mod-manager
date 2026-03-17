@@ -17,7 +17,8 @@ use CoquiBot\SpaceManager\Installer\ToolkitInstaller;
 /**
  * Agent-facing tool for managing installed content and social actions.
  *
- * Actions: installed, disable, enable, remove, star, unstar, submit
+ * Actions: installed, disable, enable, remove, star, unstar, submit, tags, search_all,
+ *          collections, review, notifications, health
  */
 final class SpaceManageTool implements ToolInterface
 {
@@ -40,7 +41,11 @@ final class SpaceManageTool implements ToolInterface
             . 'star/unstar (community feedback — requires auth), '
             . 'submit (submit a URL for review on coqui.space), '
             . 'tags (discover available tags for filtering), '
-            . 'search_all (unified search across skills and toolkits).';
+            . 'search_all (unified search across skills and toolkits), '
+            . 'collections (manage collections — sub_action: list/create/details/update/delete/add_item/remove_item), '
+            . 'review (post a review — requires auth), '
+            . 'notifications (sub_action: list/mark_read/mark_all_read — requires auth), '
+            . 'health (check API status).';
     }
 
     public function parameters(): array
@@ -49,18 +54,33 @@ final class SpaceManageTool implements ToolInterface
             new EnumParameter(
                 'action',
                 'The operation to perform',
-                ['installed', 'disable', 'enable', 'remove', 'star', 'unstar', 'submit', 'tags', 'search_all'],
+                ['installed', 'disable', 'enable', 'remove', 'star', 'unstar', 'submit', 'tags', 'search_all', 'collections', 'review', 'notifications', 'health'],
             ),
+            new StringParameter('sub_action', 'Sub-action for collections/notifications', required: false),
             new StringParameter('name', 'Content identifier: skill directory name for skills, vendor/package for toolkits. Auto-detected by "/" presence.', required: false),
             new EnumParameter('type', 'Content type filter (for installed/tags)', ['all', 'skills', 'toolkits', 'skill', 'toolkit'], required: false),
-            new EnumParameter('entity_type', 'Entity type for star/unstar', ['skill', 'toolkit'], required: false),
-            new StringParameter('owner', 'GitHub username (required for star/unstar)', required: false),
+            new EnumParameter('entity_type', 'Entity type for star/unstar/review/collection items', ['skill', 'toolkit'], required: false),
+            new StringParameter('owner', 'GitHub username (required for star/unstar/review)', required: false),
             new StringParameter('source_url', 'Repository or source URL (required for submit)', required: false),
             new StringParameter('notes', 'Additional notes for submission', required: false),
             new BoolParameter('purge', 'Permanently delete when removing (default: false — just disables)', required: false),
             new StringParameter('query', 'Search keywords (required for search_all)', required: false),
-            new NumberParameter('limit', 'Maximum results for search_all (1-50, default 10)', required: false),
-            new StringParameter('cursor', 'Pagination cursor for search_all (applies to skill results only)', required: false),
+            new NumberParameter('limit', 'Maximum results (1-50)', required: false),
+            new StringParameter('cursor', 'Pagination cursor', required: false),
+            // Collection fields
+            new NumberParameter('collection_id', 'Collection ID (for details/update/delete/add_item/remove_item)', required: false),
+            new StringParameter('collection_name', 'Collection name (for create/update)', required: false),
+            new StringParameter('description', 'Description (for collection create/update)', required: false),
+            new BoolParameter('is_public', 'Public visibility for collection (default: true)', required: false),
+            new NumberParameter('entity_id', 'Entity ID for collection item', required: false),
+            new StringParameter('note', 'Note for collection item', required: false),
+            // Review fields
+            new NumberParameter('rating', 'Rating from 1 to 5 (required for review)', required: false),
+            new StringParameter('title', 'Review title', required: false),
+            new StringParameter('body', 'Review body', required: false),
+            // Notification fields
+            new NumberParameter('notification_id', 'Notification ID (for mark_read)', required: false),
+            new BoolParameter('unread', 'Filter to unread only (for notifications list)', required: false),
         ];
     }
 
@@ -79,7 +99,11 @@ final class SpaceManageTool implements ToolInterface
                 'submit' => $this->submit($input),
                 'tags' => $this->tags($input),
                 'search_all' => $this->searchAll($input),
-                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: installed, disable, enable, remove, star, unstar, submit, tags, search_all"),
+                'collections' => $this->collections($input),
+                'review' => $this->review($input),
+                'notifications' => $this->notifications($input),
+                'health' => $this->health(),
+                default => ToolResult::error("Unknown action: '{$action}'. Valid: installed, disable, enable, remove, star, unstar, submit, tags, search_all, collections, review, notifications, health"),
             };
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage());
@@ -420,8 +444,8 @@ final class SpaceManageTool implements ToolInterface
 
             foreach ($toolkitResults as $item) {
                 $name = (string) ($item['name'] ?? '');
-                $downloads = (int) ($item['downloads'] ?? 0);
-                $favers = (int) ($item['favers'] ?? 0);
+                $downloads = $this->formatNumber((int) ($item['downloads'] ?? 0));
+                $favers = $this->formatNumber((int) ($item['favers'] ?? 0));
                 $verified = !empty($item['verified_publisher']) ? '✓' : '—';
 
                 $lines[] = "| `{$name}` | {$downloads} | {$favers} | {$verified} |";
@@ -435,6 +459,315 @@ final class SpaceManageTool implements ToolInterface
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collections(array $input): ToolResult
+    {
+        $subAction = (string) ($input['sub_action'] ?? 'list');
+
+        return match ($subAction) {
+            'list' => $this->collectionsList($input),
+            'create' => $this->collectionsCreate($input),
+            'details' => $this->collectionsDetails($input),
+            'update' => $this->collectionsUpdate($input),
+            'delete' => $this->collectionsDelete($input),
+            'add_item' => $this->collectionsAddItem($input),
+            'remove_item' => $this->collectionsRemoveItem($input),
+            default => ToolResult::error("Unknown collections sub_action: '{$subAction}'. Valid: list, create, details, update, delete, add_item, remove_item"),
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collectionsList(array $input): ToolResult
+    {
+        $limit = (int) ($input['limit'] ?? 20);
+        $cursor = isset($input['cursor']) ? (string) $input['cursor'] : null;
+
+        $data = $this->client->listCollections($limit, $cursor);
+        $items = $data['items'] ?? [];
+
+        if ($items === []) {
+            return ToolResult::success('No public collections found.');
+        }
+
+        $lines = ['## Public Collections', ''];
+        $lines[] = '| ID | Name | Items | Visibility | Owner |';
+        $lines[] = '|----|------|-------|------------|-------|';
+
+        foreach ($items as $item) {
+            $id = (string) ($item['id'] ?? '');
+            $name = (string) ($item['name'] ?? '');
+            $count = (string) ($item['itemCount'] ?? '0');
+            $visibility = !empty($item['isPublic']) ? 'public' : 'private';
+            $owner = (string) ($item['owner']['handle'] ?? '');
+
+            $lines[] = "| {$id} | {$name} | {$count} | {$visibility} | {$owner} |";
+        }
+
+        $nextCursor = $data['nextCursor'] ?? null;
+        if ($nextCursor !== null) {
+            $lines[] = '';
+            $lines[] = "*More available — use `cursor: \"{$nextCursor}\"`.*";
+        }
+
+        return ToolResult::success(implode("\n", $lines));
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collectionsCreate(array $input): ToolResult
+    {
+        $name = (string) ($input['collection_name'] ?? '');
+        if ($name === '') {
+            return ToolResult::error('Parameter "collection_name" is required for collections create.');
+        }
+
+        $description = isset($input['description']) ? (string) $input['description'] : null;
+        $isPublic = (bool) ($input['is_public'] ?? true);
+
+        $data = $this->client->createCollection($name, $description, $isPublic);
+        $id = $data['id'] ?? 'unknown';
+
+        return ToolResult::success("Collection \"{$name}\" created (ID: {$id}).");
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collectionsDetails(array $input): ToolResult
+    {
+        $id = (int) ($input['collection_id'] ?? 0);
+        if ($id === 0) {
+            return ToolResult::error('Parameter "collection_id" is required for collections details.');
+        }
+
+        $data = $this->client->getCollection($id);
+        $name = (string) ($data['name'] ?? '');
+        $description = (string) ($data['description'] ?? '');
+        $isPublic = !empty($data['isPublic']);
+        $items = (array) ($data['items'] ?? []);
+
+        $lines = ["## Collection: {$name}"];
+        if ($description !== '') {
+            $lines[] = $description;
+        }
+        $lines[] = '';
+        $lines[] = '**Visibility:** ' . ($isPublic ? 'Public' : 'Private');
+        $lines[] = '**Items:** ' . count($items);
+
+        if ($items !== []) {
+            $lines[] = '';
+            $lines[] = '| Type | Name | Note |';
+            $lines[] = '|------|------|------|';
+
+            foreach ($items as $item) {
+                $type = (string) ($item['entityType'] ?? '');
+                $itemName = (string) ($item['name'] ?? $item['displayName'] ?? '');
+                $note = (string) ($item['note'] ?? '');
+                $lines[] = "| {$type} | {$itemName} | {$note} |";
+            }
+        }
+
+        return ToolResult::success(implode("\n", $lines));
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collectionsUpdate(array $input): ToolResult
+    {
+        $id = (int) ($input['collection_id'] ?? 0);
+        if ($id === 0) {
+            return ToolResult::error('Parameter "collection_id" is required for collections update.');
+        }
+
+        $data = [];
+        if (isset($input['collection_name'])) {
+            $data['name'] = (string) $input['collection_name'];
+        }
+        if (isset($input['description'])) {
+            $data['description'] = (string) $input['description'];
+        }
+        if (isset($input['is_public'])) {
+            $data['isPublic'] = (bool) $input['is_public'];
+        }
+
+        if ($data === []) {
+            return ToolResult::error('At least one field (collection_name, description, is_public) is required for update.');
+        }
+
+        $this->client->updateCollection($id, $data);
+
+        return ToolResult::success("Collection #{$id} updated.");
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collectionsDelete(array $input): ToolResult
+    {
+        $id = (int) ($input['collection_id'] ?? 0);
+        if ($id === 0) {
+            return ToolResult::error('Parameter "collection_id" is required for collections delete.');
+        }
+
+        $this->client->deleteCollection($id);
+
+        return ToolResult::success("Collection #{$id} deleted.");
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collectionsAddItem(array $input): ToolResult
+    {
+        $id = (int) ($input['collection_id'] ?? 0);
+        $entityType = (string) ($input['entity_type'] ?? '');
+        $entityId = (int) ($input['entity_id'] ?? 0);
+
+        if ($id === 0 || $entityType === '' || $entityId === 0) {
+            return ToolResult::error('Parameters "collection_id", "entity_type", and "entity_id" are required for add_item.');
+        }
+
+        $note = isset($input['note']) ? (string) $input['note'] : null;
+        $this->client->addCollectionItem($id, $entityType, $entityId, $note);
+
+        return ToolResult::success("Added {$entityType} #{$entityId} to collection #{$id}.");
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function collectionsRemoveItem(array $input): ToolResult
+    {
+        $id = (int) ($input['collection_id'] ?? 0);
+        $entityType = (string) ($input['entity_type'] ?? '');
+        $entityId = (int) ($input['entity_id'] ?? 0);
+
+        if ($id === 0 || $entityType === '' || $entityId === 0) {
+            return ToolResult::error('Parameters "collection_id", "entity_type", and "entity_id" are required for remove_item.');
+        }
+
+        $this->client->removeCollectionItem($id, $entityType, $entityId);
+
+        return ToolResult::success("Removed {$entityType} #{$entityId} from collection #{$id}.");
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function review(array $input): ToolResult
+    {
+        $entityType = (string) ($input['entity_type'] ?? '');
+        $owner = (string) ($input['owner'] ?? '');
+        $name = (string) ($input['name'] ?? '');
+        $rating = (int) ($input['rating'] ?? 0);
+
+        if ($entityType === '' || $owner === '' || $name === '' || $rating < 1 || $rating > 5) {
+            return ToolResult::error('Parameters "entity_type", "owner", "name", and "rating" (1-5) are required for review.');
+        }
+
+        $title = isset($input['title']) ? (string) $input['title'] : null;
+        $body = isset($input['body']) ? (string) $input['body'] : null;
+
+        $this->client->createReview($entityType, $owner, $name, $rating, $title, $body);
+
+        $stars = str_repeat('★', $rating) . str_repeat('☆', 5 - $rating);
+
+        return ToolResult::success("Review posted for {$entityType} `{$owner}/{$name}` ({$stars}).");
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function notifications(array $input): ToolResult
+    {
+        $subAction = (string) ($input['sub_action'] ?? 'list');
+
+        return match ($subAction) {
+            'list' => $this->notificationsList($input),
+            'mark_read' => $this->notificationsMarkRead($input),
+            'mark_all_read' => $this->notificationsMarkAllRead(),
+            default => ToolResult::error("Unknown notifications sub_action: '{$subAction}'. Valid: list, mark_read, mark_all_read"),
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function notificationsList(array $input): ToolResult
+    {
+        $limit = (int) ($input['limit'] ?? 50);
+        $unread = isset($input['unread']) ? (bool) $input['unread'] : null;
+
+        $data = $this->client->myNotifications($limit, $unread);
+        $items = $data['items'] ?? [];
+
+        if ($items === []) {
+            return ToolResult::success($unread ? 'No unread notifications.' : 'No notifications.');
+        }
+
+        $lines = ['## Notifications', ''];
+
+        foreach ($items as $item) {
+            $read = !empty($item['read']);
+            $icon = $read ? '○' : '●';
+            $title = (string) ($item['title'] ?? $item['message'] ?? '');
+            $lines[] = "{$icon} {$title}";
+        }
+
+        return ToolResult::success(implode("\n", $lines));
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function notificationsMarkRead(array $input): ToolResult
+    {
+        $id = (int) ($input['notification_id'] ?? 0);
+        if ($id === 0) {
+            return ToolResult::error('Parameter "notification_id" is required for mark_read.');
+        }
+
+        $this->client->markNotificationsRead(['id' => $id]);
+
+        return ToolResult::success("Notification #{$id} marked as read.");
+    }
+
+    private function notificationsMarkAllRead(): ToolResult
+    {
+        $this->client->markNotificationsRead(['all' => true]);
+
+        return ToolResult::success('All notifications marked as read.');
+    }
+
+    private function health(): ToolResult
+    {
+        $data = $this->client->healthCheck();
+        $status = (string) ($data['status'] ?? 'unknown');
+        $version = (string) ($data['version'] ?? '-');
+        $timestamp = (string) ($data['timestamp'] ?? '-');
+
+        return ToolResult::success("API Status: {$status} | Version: {$version} | Time: {$timestamp}");
+    }
+
+    // ── Content helpers ──────────────────────────────────────────────
+
+    private function formatNumber(int $value): string
+    {
+        if ($value >= 1_000_000) {
+            return number_format($value / 1_000_000, 1) . 'M';
+        }
+        if ($value >= 1_000) {
+            return number_format($value / 1_000, 1) . 'K';
+        }
+        return (string) $value;
+    }
 
     /**
      * Determine if a name refers to a toolkit (contains /) or a skill.

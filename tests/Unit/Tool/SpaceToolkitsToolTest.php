@@ -430,3 +430,23 @@ test('API errors are caught and returned as ToolResult errors', function () {
 
     expect($result->status)->toBe(ToolResultStatus::Error);
 });
+
+// ── Delete ───────────────────────────────────────────────────────────
+
+test('delete returns success on valid response', function () {
+    $tool = createToolkitsTool([
+        ['success' => true, 'message' => 'Toolkit deleted'],
+    ]);
+
+    $result = $tool->execute(['action' => 'delete', 'owner' => 'testuser', 'name' => 'my-toolkit']);
+
+    expect($result->content)->toContain('deleted');
+});
+
+test('delete requires owner and name', function () {
+    $tool = createToolkitsTool([]);
+
+    $result = $tool->execute(['action' => 'delete']);
+
+    expect($result->status)->toBe(ToolResultStatus::Error);
+});

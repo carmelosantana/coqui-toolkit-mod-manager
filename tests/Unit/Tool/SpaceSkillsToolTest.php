@@ -378,3 +378,35 @@ test('API errors are caught and returned as ToolResult errors', function () {
     expect($result->status)->toBe(ToolResultStatus::Error)
         ->and($result->content)->toContain('500');
 });
+
+// ── Delete ───────────────────────────────────────────────────────────
+
+test('delete returns success on valid response', function () {
+    $tool = createSkillsTool([
+        ['success' => true, 'message' => 'Skill deleted'],
+    ]);
+
+    $result = $tool->execute(['action' => 'delete', 'owner' => 'testuser', 'name' => 'my-skill']);
+
+    expect($result->content)->toContain('deleted');
+});
+
+test('delete requires owner and name', function () {
+    $tool = createSkillsTool([]);
+
+    $result = $tool->execute(['action' => 'delete']);
+
+    expect($result->status)->toBe(ToolResultStatus::Error);
+});
+
+// ── Log Install ──────────────────────────────────────────────────────
+
+test('log_install returns success', function () {
+    $tool = createSkillsTool([
+        ['success' => true],
+    ]);
+
+    $result = $tool->execute(['action' => 'log_install', 'owner' => 'testuser', 'name' => 'my-skill']);
+
+    expect($result->content)->toContain('Install');
+});

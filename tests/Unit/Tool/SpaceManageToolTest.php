@@ -589,3 +589,119 @@ test('API errors are caught and returned as ToolResult errors', function () {
     expect($result->status)->toBe(ToolResultStatus::Error)
         ->and($result->content)->toContain('401');
 });
+
+// ── Collections ──────────────────────────────────────────────────────
+
+test('collections list returns formatted table', function () {
+    $tool = createManageTool([
+        [
+            'items' => [
+                ['id' => 'abc', 'name' => 'Favorites', 'itemCount' => 3, 'isPublic' => true],
+            ],
+        ],
+    ]);
+
+    $result = $tool->execute(['action' => 'collections', 'sub_action' => 'list']);
+
+    expect($result->content)->toContain('Favorites')
+        ->and($result->content)->toContain('abc');
+});
+
+test('collections create returns success', function () {
+    $tool = createManageTool([
+        ['id' => 'new123', 'name' => 'My New Collection'],
+    ]);
+
+    $result = $tool->execute([
+        'action' => 'collections',
+        'sub_action' => 'create',
+        'collection_name' => 'My New Collection',
+    ]);
+
+    expect($result->content)->toContain('created');
+});
+
+test('collections delete returns success', function () {
+    $tool = createManageTool([
+        ['success' => true],
+    ]);
+
+    $result = $tool->execute([
+        'action' => 'collections',
+        'sub_action' => 'delete',
+        'collection_id' => 42,
+    ]);
+
+    expect($result->content)->toContain('deleted');
+});
+
+test('collections requires sub_action', function () {
+    $tool = createManageTool([]);
+
+    $result = $tool->execute(['action' => 'collections']);
+
+    expect($result->status)->toBe(ToolResultStatus::Error);
+});
+
+// ── Review ───────────────────────────────────────────────────────────
+
+test('review posts successfully', function () {
+    $tool = createManageTool([
+        ['success' => true, 'id' => 'rev1'],
+    ]);
+
+    $result = $tool->execute([
+        'action' => 'review',
+        'entity_type' => 'skill',
+        'owner' => 'testuser',
+        'name' => 'my-skill',
+        'rating' => 5,
+        'title' => 'Great!',
+        'body' => 'Works perfectly.',
+    ]);
+
+    expect($result->content)->toContain('Review');
+});
+
+// ── Notifications ────────────────────────────────────────────────────
+
+test('notifications list returns formatted output', function () {
+    $tool = createManageTool([
+        [
+            'items' => [
+                ['id' => 'n1', 'title' => 'New star', 'isRead' => false, 'createdAt' => '2024-01-15T10:00:00Z'],
+            ],
+        ],
+    ]);
+
+    $result = $tool->execute(['action' => 'notifications', 'sub_action' => 'list']);
+
+    expect($result->content)->toContain('New star');
+});
+
+test('notifications mark_read returns success', function () {
+    $tool = createManageTool([
+        ['success' => true],
+    ]);
+
+    $result = $tool->execute([
+        'action' => 'notifications',
+        'sub_action' => 'mark_read',
+        'notification_id' => 42,
+    ]);
+
+    expect($result->content)->toContain('read');
+});
+
+// ── Health ───────────────────────────────────────────────────────────
+
+test('health returns formatted status', function () {
+    $tool = createManageTool([
+        ['status' => 'ok', 'version' => '0.1.0', 'timestamp' => '2024-01-15T10:00:00Z'],
+    ]);
+
+    $result = $tool->execute(['action' => 'health']);
+
+    expect($result->content)->toContain('ok')
+        ->and($result->content)->toContain('0.1.0');
+});

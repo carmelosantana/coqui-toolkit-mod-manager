@@ -12,7 +12,9 @@ test('implements ToolkitInterface', function () {
     expect($toolkit)->toBeInstanceOf(ToolkitInterface::class);
 });
 
-test('exposes exactly three tools', function () {
+test('exposes three tools without authentication', function () {
+    putenv('COQUI_SPACE_API_TOKEN');
+
     $dir = sys_get_temp_dir() . '/coqui-test-' . uniqid();
     $toolkit = SpaceManagerToolkit::fromEnv($dir);
 
@@ -22,9 +24,13 @@ test('exposes exactly three tools', function () {
     expect($tools[0])->toBeInstanceOf(ToolInterface::class);
     expect($tools[1])->toBeInstanceOf(ToolInterface::class);
     expect($tools[2])->toBeInstanceOf(ToolInterface::class);
+
+    putenv('COQUI_SPACE_API_TOKEN');
 });
 
 test('tool names are unique', function () {
+    putenv('COQUI_SPACE_API_TOKEN');
+
     $dir = sys_get_temp_dir() . '/coqui-test-' . uniqid();
     $toolkit = SpaceManagerToolkit::fromEnv($dir);
 
@@ -35,6 +41,50 @@ test('tool names are unique', function () {
 
     expect($names)->toEqual(['space_skills', 'space_toolkits', 'space']);
     expect(count(array_unique($names)))->toBe(3);
+
+    putenv('COQUI_SPACE_API_TOKEN');
+});
+
+test('exposes four tools when authenticated', function () {
+    putenv('COQUI_SPACE_API_TOKEN=cqs_test_token');
+
+    $dir = sys_get_temp_dir() . '/coqui-test-' . uniqid();
+    $toolkit = SpaceManagerToolkit::fromEnv($dir);
+
+    $tools = $toolkit->tools();
+    $names = array_map(
+        fn(ToolInterface $tool) => $tool->name(),
+        $tools,
+    );
+
+    expect($tools)->toHaveCount(4)
+        ->and($names)->toContain('space_account');
+
+    putenv('COQUI_SPACE_API_TOKEN');
+});
+
+test('guidelines include space_account when authenticated', function () {
+    putenv('COQUI_SPACE_API_TOKEN=cqs_test_token');
+
+    $dir = sys_get_temp_dir() . '/coqui-test-' . uniqid();
+    $toolkit = SpaceManagerToolkit::fromEnv($dir);
+
+    $guidelines = $toolkit->guidelines();
+    expect($guidelines)->toContain('space_account');
+
+    putenv('COQUI_SPACE_API_TOKEN');
+});
+
+test('guidelines exclude space_account tool row when anonymous', function () {
+    putenv('COQUI_SPACE_API_TOKEN');
+
+    $dir = sys_get_temp_dir() . '/coqui-test-' . uniqid();
+    $toolkit = SpaceManagerToolkit::fromEnv($dir);
+
+    $guidelines = $toolkit->guidelines();
+    expect($guidelines)->not->toContain('Your account dashboard');
+
+    putenv('COQUI_SPACE_API_TOKEN');
 });
 
 test('all tools produce valid function schemas', function () {

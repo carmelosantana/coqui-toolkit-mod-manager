@@ -18,7 +18,7 @@ use CoquiBot\SpaceManager\Installer\SkillInstaller;
 /**
  * Agent-facing tool for discovering and managing skills on Coqui Space.
  *
- * Actions: search, list, details, versions, reviews, file, install, update, publish
+ * Actions: search, list, details, versions, reviews, file, install, update, publish, delete, log_install
  */
 final class SpaceSkillsTool implements ToolInterface
 {
@@ -39,7 +39,8 @@ final class SpaceSkillsTool implements ToolInterface
             . 'details (full metadata for owner/name), versions (version history), '
             . 'reviews (community reviews), file (preview raw SKILL.md), '
             . 'install (download to workspace), update (update installed skill), '
-            . 'publish (create/update skill on coqui.space).';
+            . 'publish (create/update skill on coqui.space), '
+            . 'delete (remove own skill), log_install (track an install for stats).';
     }
 
     public function parameters(): array
@@ -48,7 +49,7 @@ final class SpaceSkillsTool implements ToolInterface
             new EnumParameter(
                 'action',
                 'The operation to perform',
-                ['search', 'list', 'details', 'versions', 'reviews', 'file', 'install', 'update', 'publish'],
+                ['search', 'list', 'details', 'versions', 'reviews', 'file', 'install', 'update', 'publish', 'delete', 'log_install'],
             ),
             new StringParameter('query', 'Search keywords (required for search)', required: false),
             new StringParameter('owner', 'GitHub username of the skill owner (required for details/versions/reviews/file/install)', required: false),
@@ -78,7 +79,9 @@ final class SpaceSkillsTool implements ToolInterface
                 'install' => $this->install($input),
                 'update' => $this->update($input),
                 'publish' => $this->publish($input),
-                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, details, versions, reviews, file, install, update, publish"),
+                'delete' => $this->deleteSkill($input),
+                'log_install' => $this->logInstall($input),
+                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, details, versions, reviews, file, install, update, publish, delete, log_install"),
             };
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage());
@@ -261,7 +264,7 @@ final class SpaceSkillsTool implements ToolInterface
         $lines[] = '';
         $lines[] = '### Description';
         $lines[] = '';
-        $lines[] = $this->truncate($description, 500);
+        $lines[] = $this->truncate($description, 300);
 
         $lines[] = '';
         $lines[] = '### Quick Actions';
@@ -484,6 +487,42 @@ final class SpaceSkillsTool implements ToolInterface
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function deleteSkill(array $input): ToolResult
+    {
+        $owner = (string) ($input['owner'] ?? '');
+        $name = (string) ($input['name'] ?? '');
+
+        if ($owner === '' || $name === '') {
+            return ToolResult::error('Parameters "owner" and "name" are required for delete.');
+        }
+
+        $this->client->deleteSkill($owner, $name);
+
+        return ToolResult::success("Skill `{$owner}/{$name}` has been deleted (soft-delete to draft).");
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function logInstall(array $input): ToolResult
+    {
+        $owner = (string) ($input['owner'] ?? '');
+        $name = (string) ($input['name'] ?? '');
+
+        if ($owner === '' || $name === '') {
+            return ToolResult::error('Parameters "owner" and "name" are required for log_install.');
+        }
+
+        $this->client->logSkillInstall($owner, $name);
+
+        return ToolResult::success("Install logged for `{$owner}/{$name}`.");
+    }
+
+    // ── Formatting helpers ───────────────────────────────────────────
 
     private function checkVerifiedStatus(string $owner, string $name): void
     {

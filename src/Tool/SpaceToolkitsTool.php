@@ -16,7 +16,7 @@ use CoquiBot\SpaceManager\Installer\ToolkitInstaller;
 /**
  * Agent-facing tool for discovering and managing toolkits on Coqui Space.
  *
- * Actions: search, popular, details, reviews, install, update, publish
+ * Actions: search, popular, details, reviews, install, update, publish, delete
  */
 final class SpaceToolkitsTool implements ToolInterface
 {
@@ -37,7 +37,8 @@ final class SpaceToolkitsTool implements ToolInterface
             . 'popular (browse popular — page-based, legacy), '
             . 'details (full metadata by package name or owner/name), '
             . 'reviews (community reviews), install (composer require into workspace), '
-            . 'update (composer update), publish (register toolkit on coqui.space).';
+            . 'update (composer update), publish (register toolkit on coqui.space), '
+            . 'delete (remove own toolkit).';
     }
 
     public function parameters(): array
@@ -46,7 +47,7 @@ final class SpaceToolkitsTool implements ToolInterface
             new EnumParameter(
                 'action',
                 'The operation to perform',
-                ['search', 'list', 'popular', 'details', 'reviews', 'install', 'update', 'publish'],
+                ['search', 'list', 'popular', 'details', 'reviews', 'install', 'update', 'publish', 'delete'],
             ),
             new StringParameter('query', 'Search keywords (required for search)', required: false),
             new StringParameter('package', 'Full Composer package name in vendor/package format (for details/install/update/publish)', required: false),
@@ -80,7 +81,8 @@ final class SpaceToolkitsTool implements ToolInterface
                 'install' => $this->install($input),
                 'update' => $this->update($input),
                 'publish' => $this->publish($input),
-                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, popular, details, reviews, install, update, publish"),
+                'delete' => $this->deleteToolkit($input),
+                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, popular, details, reviews, install, update, publish, delete"),
             };
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage());
@@ -418,7 +420,7 @@ final class SpaceToolkitsTool implements ToolInterface
 
         $lines = ["## {$name}"];
         $lines[] = '';
-        $lines[] = $this->truncate($description, 500);
+        $lines[] = $this->truncate($description, 300);
         $lines[] = '';
         $lines[] = "**Type:** {$type}";
         $lines[] = "**Repository:** {$repository}";
@@ -476,7 +478,7 @@ final class SpaceToolkitsTool implements ToolInterface
 
         $lines = ["## {$displayName}"];
         $lines[] = '';
-        $lines[] = $this->truncate($description, 500);
+        $lines[] = $this->truncate($description, 300);
         $lines[] = '';
         $ownerDisplay = (string) ($ownerInfo['displayName'] ?? $owner);
         $ownerHandle = (string) ($ownerInfo['handle'] ?? $owner);
@@ -517,6 +519,23 @@ final class SpaceToolkitsTool implements ToolInterface
         }
 
         return ToolResult::success(implode("\n", $lines));
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function deleteToolkit(array $input): ToolResult
+    {
+        $owner = (string) ($input['owner'] ?? '');
+        $name = (string) ($input['name'] ?? '');
+
+        if ($owner === '' || $name === '') {
+            return ToolResult::error('Parameters "owner" and "name" are required for delete.');
+        }
+
+        $this->client->deleteToolkit($owner, $name);
+
+        return ToolResult::success("Toolkit `{$owner}/{$name}` has been deleted (soft-delete to draft).");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

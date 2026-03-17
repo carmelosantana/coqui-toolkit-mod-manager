@@ -68,17 +68,26 @@
                 "space_skills": [
                     {"action": "install"},
                     {"action": "update"},
-                    {"action": "publish"}
+                    {"action": "publish"},
+                    {"action": "delete"}
                 ],
                 "space_toolkits": [
                     {"action": "install"},
                     {"action": "update"},
-                    {"action": "publish"}
+                    {"action": "publish"},
+                    {"action": "delete"}
                 ],
                 "space": [
                     {"action": "disable"},
                     {"action": "enable"},
-                    {"action": "remove"}
+                    {"action": "remove"},
+                    {"action": "collections", "sub_action": "create"},
+                    {"action": "collections", "sub_action": "update"},
+                    {"action": "collections", "sub_action": "delete"},
+                    {"action": "collections", "sub_action": "add_item"},
+                    {"action": "collections", "sub_action": "remove_item"},
+                    {"action": "review"},
+                    {"action": "submit"}
                 ]
             }
         }
