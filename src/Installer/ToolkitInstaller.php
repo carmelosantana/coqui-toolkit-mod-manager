@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace CoquiBot\SpaceManager\Installer;
+namespace CoquiBot\ModManager\Installer;
 
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Config\ModRegistry;
 
 /**
  * Manages the toolkit lifecycle via Composer: install, update, disable, enable, remove.
  *
  * Toolkits are Composer packages installed into the `.workspace/` directory.
- * Disabled toolkits have their version constraint saved in `.space-state.json`
+ * Disabled toolkits have their version constraint saved in `.mods-state.json`
  * so they can be re-enabled without contacting the API.
  */
 final class ToolkitInstaller
 {
     public function __construct(
-        private readonly SpaceClient $client,
+        private readonly ModClient $client,
         private readonly string $workspaceDirectory,
     ) {}
 
@@ -30,7 +30,7 @@ final class ToolkitInstaller
     {
         self::validatePackageName($package);
 
-        if (SpaceRegistry::isExcluded($package)) {
+        if (ModRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be managed.");
         }
 
@@ -66,7 +66,7 @@ final class ToolkitInstaller
     {
         self::validatePackageName($package);
 
-        if (SpaceRegistry::isExcluded($package)) {
+        if (ModRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be managed.");
         }
 
@@ -95,7 +95,7 @@ final class ToolkitInstaller
 
         // Active packages from composer.json
         foreach ($installed as $package => $constraint) {
-            if (!SpaceRegistry::looksLikeCoquiPackage($package) || SpaceRegistry::isExcluded($package)) {
+            if (!ModRegistry::looksLikeCoquiPackage($package) || ModRegistry::isExcluded($package)) {
                 continue;
             }
 
@@ -108,7 +108,7 @@ final class ToolkitInstaller
 
         // Disabled packages from state file
         foreach ($disabled as $package => $info) {
-            if (SpaceRegistry::isExcluded($package)) {
+            if (ModRegistry::isExcluded($package)) {
                 continue;
             }
 
@@ -131,7 +131,7 @@ final class ToolkitInstaller
     {
         self::validatePackageName($package);
 
-        if (SpaceRegistry::isExcluded($package)) {
+        if (ModRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be disabled.");
         }
 
@@ -152,7 +152,7 @@ final class ToolkitInstaller
 
         $this->runComposer("remove {$package} --no-interaction");
 
-        return "Toolkit '{$package}' disabled. Restart Coqui to apply. Use space(action: \"enable\", name: \"{$package}\") to re-enable.";
+        return "Toolkit '{$package}' disabled. Restart Coqui to apply. Use mods(action: \"enable\", name: \"{$package}\") to re-enable.";
     }
 
     /**
@@ -169,7 +169,7 @@ final class ToolkitInstaller
                 return "Toolkit '{$package}' is already enabled.";
             }
             throw new \RuntimeException(
-                "Toolkit '{$package}' has no saved state. Use space_toolkits(action: \"install\", package: \"{$package}\") to install it.",
+                "Toolkit '{$package}' has no saved state. Use mods_toolkits(action: \"install\", package: \"{$package}\") to install it.",
             );
         }
 
@@ -188,7 +188,7 @@ final class ToolkitInstaller
     {
         self::validatePackageName($package);
 
-        if (SpaceRegistry::isExcluded($package)) {
+        if (ModRegistry::isExcluded($package)) {
             throw new \RuntimeException("Package '{$package}' is a core dependency and cannot be removed.");
         }
 
@@ -254,7 +254,7 @@ final class ToolkitInstaller
      */
     private function readState(): array
     {
-        $stateFile = $this->workspaceDirectory . '/' . SpaceRegistry::STATE_FILE;
+        $stateFile = $this->workspaceDirectory . '/' . ModRegistry::STATE_FILE;
 
         if (!file_exists($stateFile)) {
             return [];
@@ -300,7 +300,7 @@ final class ToolkitInstaller
      */
     private function writeState(array $state): void
     {
-        $stateFile = $this->workspaceDirectory . '/' . SpaceRegistry::STATE_FILE;
+        $stateFile = $this->workspaceDirectory . '/' . ModRegistry::STATE_FILE;
 
         if ($state === []) {
             if (file_exists($stateFile)) {
@@ -365,7 +365,7 @@ final class ToolkitInstaller
 
         // Try to resolve owner/name from package name
         // Package format: vendor/name → owner is the vendor, we need to look up the toolkit
-        // Best-effort: search for the toolkit to find the correct owner/name on coqui.space
+        // Best-effort: search for the toolkit to find the correct owner/name on agentcoqui.com
         try {
             $results = $this->client->searchToolkits($package, 1);
             $items = $results['results'] ?? [];
@@ -375,11 +375,11 @@ final class ToolkitInstaller
             }
 
             $first = $items[0];
-            $owner = SpaceRegistry::extractOwner($first);
+            $owner = ModRegistry::extractOwner($first);
             $urlName = (string) ($first['urlName'] ?? '');
 
             if ($owner !== '' && $urlName !== '') {
-                $this->client->logToolkitInstall($owner, $urlName, 'coqui-space-manager/0.1.0');
+                $this->client->logToolkitInstall($owner, $urlName, 'coqui-toolkit-mod-manager/0.1.0');
             }
         } catch (\Throwable) {
             // Fire-and-forget — don't block install on stats failure

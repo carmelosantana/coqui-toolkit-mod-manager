@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use CoquiBot\SpaceManager\Api\SpaceClient;
+use CoquiBot\ModManager\Api\ModClient;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-function createClient(MockHttpClient $http): SpaceClient
+function createClient(MockHttpClient $http): ModClient
 {
-    return new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    return new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -292,7 +292,7 @@ test('logToolkitInstall sends POST with client version', function () {
     ]);
 
     $client = createClient($http);
-    $result = $client->logToolkitInstall('coquibot', 'browser', 'coqui-space-manager/0.1.0');
+    $result = $client->logToolkitInstall('coquibot', 'browser', 'coqui-toolkit-mod-manager/0.1.0');
 
     expect($result)->toHaveKey('ok');
 });
@@ -500,8 +500,8 @@ test('anonymous client omits auth header', function () {
         new MockResponse(json_encode(['results' => []])),
     ]);
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => '',
         $http,
     );
@@ -517,10 +517,10 @@ test('url resolver is called for each request', function () {
         new MockResponse(json_encode(['results' => []])),
     ]);
 
-    $client = new SpaceClient(
+    $client = new ModClient(
         static function () use (&$callCount): string {
             $callCount++;
-            return 'https://coqui.space/api/v1';
+            return 'https://agentcoqui.com/api/v1';
         },
         static fn(): string => '',
         $http,

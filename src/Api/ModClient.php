@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace CoquiBot\SpaceManager\Api;
+namespace CoquiBot\ModManager\Api;
 
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
+use CoquiBot\ModManager\Config\ModRegistry;
 use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * HTTP client for the Coqui Space REST API.
+ * HTTP client for the Coqui Mods REST API.
  *
  * Uses closure-based URL and token resolution for hot-reload compatibility —
  * CredentialTool::set() → putenv() takes effect on the next API call.
  */
-final class SpaceClient
+final class ModClient
 {
     private const int TIMEOUT = 30;
 
@@ -174,7 +174,7 @@ final class SpaceClient
     }
 
     /**
-     * Create a new skill on Coqui Space.
+    * Create a new skill on Coqui Mods.
      *
      * @param array<string, mixed> $data
      * @return array<string, mixed>
@@ -307,7 +307,7 @@ final class SpaceClient
     }
 
     /**
-     * Register a new toolkit on Coqui Space.
+    * Register a new toolkit on Coqui Mods.
      *
      * @param array<string, mixed> $data
      * @return array<string, mixed>
@@ -945,7 +945,7 @@ final class SpaceClient
     {
         $headers = [
             'Accept' => 'application/json',
-            'User-Agent' => 'coqui-space-manager/0.1.0',
+            'User-Agent' => 'coqui-toolkit-mod-manager/0.1.0',
         ];
 
         if ($withAuth) {

@@ -2,43 +2,43 @@
 
 declare(strict_types=1);
 
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
+use CoquiBot\ModManager\Config\ModRegistry;
 
 // ── Constants ────────────────────────────────────────────────────
 
-test('DEFAULT_BASE_URL is coqui.space', function () {
-    expect(SpaceRegistry::DEFAULT_BASE_URL)->toBe('https://coqui.space/api/v1');
+test('DEFAULT_BASE_URL is agentcoqui', function () {
+    expect(ModRegistry::DEFAULT_BASE_URL)->toBe('https://agentcoqui.com/api/v1');
 });
 
-test('ORIGIN_FILE is .space-origin.json', function () {
-    expect(SpaceRegistry::ORIGIN_FILE)->toBe('.space-origin.json');
+test('ORIGIN_FILE is .mods-origin.json', function () {
+    expect(ModRegistry::ORIGIN_FILE)->toBe('.mods-origin.json');
 });
 
-test('STATE_FILE is .space-state.json', function () {
-    expect(SpaceRegistry::STATE_FILE)->toBe('.space-state.json');
+test('STATE_FILE is .mods-state.json', function () {
+    expect(ModRegistry::STATE_FILE)->toBe('.mods-state.json');
 });
 
 // ── isExcluded ───────────────────────────────────────────────────
 
 test('isExcluded returns true for core packages', function () {
-    expect(SpaceRegistry::isExcluded('coquibot/coqui-space-manager'))->toBeTrue()
-        ->and(SpaceRegistry::isExcluded('coquibot/coqui-toolkit-composer'))->toBeTrue()
-        ->and(SpaceRegistry::isExcluded('carmelosantana/php-agents'))->toBeTrue();
+    expect(ModRegistry::isExcluded('coquibot/coqui-toolkit-mod-manager'))->toBeTrue()
+        ->and(ModRegistry::isExcluded('coquibot/coqui-toolkit-composer'))->toBeTrue()
+        ->and(ModRegistry::isExcluded('carmelosantana/php-agents'))->toBeTrue();
 });
 
 test('isExcluded is case insensitive', function () {
-    expect(SpaceRegistry::isExcluded('CoquiBot/Coqui-Space-Manager'))->toBeTrue()
-        ->and(SpaceRegistry::isExcluded('CARMELOSANTANA/PHP-AGENTS'))->toBeTrue();
+    expect(ModRegistry::isExcluded('CoquiBot/Coqui-Toolkit-Mod-Manager'))->toBeTrue()
+        ->and(ModRegistry::isExcluded('CARMELOSANTANA/PHP-AGENTS'))->toBeTrue();
 });
 
 test('isExcluded trims whitespace', function () {
-    expect(SpaceRegistry::isExcluded('  coquibot/coqui-space-manager  '))->toBeTrue();
+    expect(ModRegistry::isExcluded('  coquibot/coqui-toolkit-mod-manager  '))->toBeTrue();
 });
 
 test('isExcluded returns false for non-core packages', function () {
-    expect(SpaceRegistry::isExcluded('coquibot/coqui-toolkit-browser'))->toBeFalse()
-        ->and(SpaceRegistry::isExcluded('acme/some-package'))->toBeFalse()
-        ->and(SpaceRegistry::isExcluded('symfony/http-client'))->toBeFalse();
+    expect(ModRegistry::isExcluded('coquibot/coqui-toolkit-browser'))->toBeFalse()
+        ->and(ModRegistry::isExcluded('acme/some-package'))->toBeFalse()
+        ->and(ModRegistry::isExcluded('symfony/http-client'))->toBeFalse();
 });
 
 // ── filterExcluded ───────────────────────────────────────────────
@@ -46,11 +46,11 @@ test('isExcluded returns false for non-core packages', function () {
 test('filterExcluded removes excluded strings', function () {
     $items = [
         'coquibot/coqui-toolkit-browser',
-        'coquibot/coqui-space-manager',
+        'coquibot/coqui-toolkit-mod-manager',
         'acme/cool-toolkit',
     ];
 
-    $result = SpaceRegistry::filterExcluded($items);
+    $result = ModRegistry::filterExcluded($items);
 
     expect($result)->toHaveCount(2)
         ->and($result[0])->toBe('coquibot/coqui-toolkit-browser')
@@ -63,7 +63,7 @@ test('filterExcluded removes excluded arrays with package key', function () {
         ['package' => 'carmelosantana/php-agents', 'status' => 'enabled'],
     ];
 
-    $result = SpaceRegistry::filterExcluded($items);
+    $result = ModRegistry::filterExcluded($items);
 
     expect($result)->toHaveCount(1)
         ->and($result[0]['package'])->toBe('coquibot/coqui-toolkit-browser');
@@ -75,29 +75,29 @@ test('filterExcluded removes excluded arrays with name key', function () {
         ['name' => 'coquibot/coqui-toolkit-composer'],
     ];
 
-    $result = SpaceRegistry::filterExcluded($items);
+    $result = ModRegistry::filterExcluded($items);
 
     expect($result)->toHaveCount(1);
 });
 
 test('filterExcluded returns empty for all excluded', function () {
     $items = [
-        'coquibot/coqui-space-manager',
+        'coquibot/coqui-toolkit-mod-manager',
         'carmelosantana/php-agents',
     ];
 
-    $result = SpaceRegistry::filterExcluded($items);
+    $result = ModRegistry::filterExcluded($items);
 
     expect($result)->toBe([]);
 });
 
 test('filterExcluded re-indexes array values', function () {
     $items = [
-        'coquibot/coqui-space-manager',
+        'coquibot/coqui-toolkit-mod-manager',
         'coquibot/coqui-toolkit-browser',
     ];
 
-    $result = SpaceRegistry::filterExcluded($items);
+    $result = ModRegistry::filterExcluded($items);
 
     expect(array_keys($result))->toBe([0]);
 });
@@ -105,31 +105,31 @@ test('filterExcluded re-indexes array values', function () {
 // ── looksLikeCoquiPackage ────────────────────────────────────────
 
 test('looksLikeCoquiPackage matches coquibot/ prefix', function () {
-    expect(SpaceRegistry::looksLikeCoquiPackage('coquibot/coqui-toolkit-browser'))->toBeTrue()
-        ->and(SpaceRegistry::looksLikeCoquiPackage('coquibot/anything'))->toBeTrue();
+    expect(ModRegistry::looksLikeCoquiPackage('coquibot/coqui-toolkit-browser'))->toBeTrue()
+        ->and(ModRegistry::looksLikeCoquiPackage('coquibot/anything'))->toBeTrue();
 });
 
 test('looksLikeCoquiPackage matches coqui-bot/ prefix', function () {
-    expect(SpaceRegistry::looksLikeCoquiPackage('coqui-bot/some-package'))->toBeTrue();
+    expect(ModRegistry::looksLikeCoquiPackage('coqui-bot/some-package'))->toBeTrue();
 });
 
 test('looksLikeCoquiPackage matches coqui-toolkit- anywhere', function () {
-    expect(SpaceRegistry::looksLikeCoquiPackage('acme/coqui-toolkit-custom'))->toBeTrue();
+    expect(ModRegistry::looksLikeCoquiPackage('acme/coqui-toolkit-custom'))->toBeTrue();
 });
 
-test('looksLikeCoquiPackage matches coqui-space- anywhere', function () {
-    expect(SpaceRegistry::looksLikeCoquiPackage('acme/coqui-space-admin'))->toBeTrue();
+test('looksLikeCoquiPackage matches coqui-mod- anywhere', function () {
+    expect(ModRegistry::looksLikeCoquiPackage('acme/coqui-mod-admin'))->toBeTrue();
 });
 
 test('looksLikeCoquiPackage is case insensitive', function () {
-    expect(SpaceRegistry::looksLikeCoquiPackage('CoquiBot/Something'))->toBeTrue()
-        ->and(SpaceRegistry::looksLikeCoquiPackage('COQUIBOT/TEST'))->toBeTrue();
+    expect(ModRegistry::looksLikeCoquiPackage('CoquiBot/Something'))->toBeTrue()
+        ->and(ModRegistry::looksLikeCoquiPackage('COQUIBOT/TEST'))->toBeTrue();
 });
 
 test('looksLikeCoquiPackage rejects non-Coqui packages', function () {
-    expect(SpaceRegistry::looksLikeCoquiPackage('symfony/http-client'))->toBeFalse()
-        ->and(SpaceRegistry::looksLikeCoquiPackage('monolog/monolog'))->toBeFalse()
-        ->and(SpaceRegistry::looksLikeCoquiPackage('php'))->toBeFalse();
+    expect(ModRegistry::looksLikeCoquiPackage('symfony/http-client'))->toBeFalse()
+        ->and(ModRegistry::looksLikeCoquiPackage('monolog/monolog'))->toBeFalse()
+        ->and(ModRegistry::looksLikeCoquiPackage('php'))->toBeFalse();
 });
 
 // ── extractOwner ─────────────────────────────────────────────────
@@ -137,29 +137,29 @@ test('looksLikeCoquiPackage rejects non-Coqui packages', function () {
 test('extractOwner handles string owner', function () {
     $item = ['owner' => 'testuser'];
 
-    expect(SpaceRegistry::extractOwner($item))->toBe('testuser');
+    expect(ModRegistry::extractOwner($item))->toBe('testuser');
 });
 
 test('extractOwner handles object owner with handle', function () {
     $item = ['owner' => ['handle' => 'testuser', 'displayName' => 'Test User']];
 
-    expect(SpaceRegistry::extractOwner($item))->toBe('testuser');
+    expect(ModRegistry::extractOwner($item))->toBe('testuser');
 });
 
 test('extractOwner returns empty for missing owner', function () {
     $item = ['name' => 'some-skill'];
 
-    expect(SpaceRegistry::extractOwner($item))->toBe('');
+    expect(ModRegistry::extractOwner($item))->toBe('');
 });
 
 test('extractOwner handles object owner without handle', function () {
     $item = ['owner' => ['displayName' => 'Test User']];
 
-    expect(SpaceRegistry::extractOwner($item))->toBe('');
+    expect(ModRegistry::extractOwner($item))->toBe('');
 });
 
 test('extractOwner handles empty array owner', function () {
     $item = ['owner' => []];
 
-    expect(SpaceRegistry::extractOwner($item))->toBe('');
+    expect(ModRegistry::extractOwner($item))->toBe('');
 });

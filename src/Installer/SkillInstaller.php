@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-namespace CoquiBot\SpaceManager\Installer;
+namespace CoquiBot\ModManager\Installer;
 
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Config\ModRegistry;
 
 /**
  * Manages the local skill lifecycle: download, install, update, disable, enable, remove.
  *
  * Skills are stored as directories under `.workspace/skills/`. Each managed skill
- * has a `.space-origin.json` file tracking its source, version, and download metadata.
+ * has a `.mods-origin.json` file tracking its source, version, and download metadata.
  */
 final class SkillInstaller
 {
     public function __construct(
-        private readonly SpaceClient $client,
+        private readonly ModClient $client,
         private readonly string $skillsDirectory,
     ) {}
 
     /**
-     * Download and install a skill from Coqui Space.
+     * Download and install a skill from Coqui Mods.
      *
      * @return array{name: string, version: string, path: string, message: string}
      */
@@ -63,7 +63,7 @@ final class SkillInstaller
 
             // Write origin tracking file
             $this->writeOrigin($targetDir, [
-                'source' => 'coqui.space',
+                'source' => 'coqui.mods',
                 'owner' => $owner,
                 'name' => $name,
                 'version' => $resolvedVersion,
@@ -103,7 +103,7 @@ final class SkillInstaller
         $origin = $this->readOrigin($dir);
         if ($origin === []) {
             throw new \RuntimeException(
-                "Skill '{$skillName}' has no origin metadata — it may not have been installed from Coqui Space.",
+                "Skill '{$skillName}' has no origin metadata — it may not have been installed from Coqui Mods.",
             );
         }
 
@@ -173,7 +173,7 @@ final class SkillInstaller
                 'name' => $displayName,
                 'version' => (string) ($origin['version'] ?? 'unknown'),
                 'status' => $disabled ? 'disabled' : 'enabled',
-                'source' => $origin !== [] ? 'coqui.space' : 'local',
+                'source' => $origin !== [] ? 'coqui.mods' : 'local',
                 'owner' => (string) ($origin['owner'] ?? ''),
                 'slug' => (string) ($origin['name'] ?? ''),
             ];
@@ -365,7 +365,7 @@ final class SkillInstaller
     private function writeOrigin(string $dir, array $data): void
     {
         file_put_contents(
-            $dir . '/' . SpaceRegistry::ORIGIN_FILE,
+            $dir . '/' . ModRegistry::ORIGIN_FILE,
             json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n",
         );
     }
@@ -375,7 +375,7 @@ final class SkillInstaller
      */
     private function readOrigin(string $dir): array
     {
-        $file = $dir . '/' . SpaceRegistry::ORIGIN_FILE;
+        $file = $dir . '/' . ModRegistry::ORIGIN_FILE;
 
         if (!file_exists($file)) {
             return [];

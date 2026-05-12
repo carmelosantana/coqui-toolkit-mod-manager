@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-use CoquiBot\SpaceManager\Installer\SkillInstaller;
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
+use CoquiBot\ModManager\Installer\SkillInstaller;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Config\ModRegistry;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 function createSkillInstaller(MockHttpClient $http, string $dir): SkillInstaller
 {
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -172,9 +172,9 @@ test('list reads origin file when present', function () {
     mkdir($skillDir, 0o755, true);
     file_put_contents($skillDir . '/SKILL.md', "---\nname: Tracked\nversion: 2.0.0\n---\n");
     file_put_contents(
-        $skillDir . '/' . SpaceRegistry::ORIGIN_FILE,
+        $skillDir . '/' . ModRegistry::ORIGIN_FILE,
         json_encode([
-            'source' => 'coqui.space',
+            'source' => 'coqui.mods',
             'owner' => 'testuser',
             'slug' => 'tracked-skill',
             'version' => '2.0.0',
@@ -188,6 +188,6 @@ test('list reads origin file when present', function () {
     $result = $installer->list();
 
     expect($result)->toHaveCount(1)
-        ->and($result[0]['source'])->toBe('coqui.space')
+        ->and($result[0]['source'])->toBe('coqui.mods')
         ->and($result[0]['owner'])->toBe('testuser');
 });

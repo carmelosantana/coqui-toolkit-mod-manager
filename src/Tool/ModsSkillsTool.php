@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace CoquiBot\SpaceManager\Tool;
+namespace CoquiBot\ModManager\Tool;
 
 use CarmeloSantana\PHPAgents\Contract\ToolInterface;
 use CarmeloSantana\PHPAgents\Tool\Parameter\BoolParameter;
@@ -11,36 +11,35 @@ use CarmeloSantana\PHPAgents\Tool\Parameter\NumberParameter;
 use CarmeloSantana\PHPAgents\Tool\Parameter\Parameter;
 use CarmeloSantana\PHPAgents\Tool\Parameter\StringParameter;
 use CarmeloSantana\PHPAgents\Tool\ToolResult;
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
-use CoquiBot\SpaceManager\Installer\SkillInstaller;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Config\ModRegistry;
+use CoquiBot\ModManager\Installer\SkillInstaller;
 
 /**
- * Agent-facing tool for discovering and managing skills on Coqui Space.
+ * Agent-facing tool for discovering and managing skills on Coqui Mods.
  *
- * Actions: search, list, details, versions, reviews, file, install, update, publish, delete, log_install
+ * Actions: search, list, details, versions, reviews, file, install, update, log_install
  */
-final class SpaceSkillsTool implements ToolInterface
+final class ModsSkillsTool implements ToolInterface
 {
     public function __construct(
-        private readonly SpaceClient $client,
+        private readonly ModClient $client,
         private readonly SkillInstaller $installer,
     ) {}
 
     public function name(): string
     {
-        return 'space_skills';
+        return 'mods_skills';
     }
 
     public function description(): string
     {
-        return 'Discover, install, and manage skills from Coqui Space. '
+        return 'Discover, install, and manage skills from Coqui Mods. '
             . 'Actions: search (keyword search), list (browse with sorting/filtering), '
             . 'details (full metadata for owner/name), versions (version history), '
             . 'reviews (community reviews), file (preview raw SKILL.md), '
             . 'install (download to workspace), update (update installed skill), '
-            . 'publish (create/update skill on coqui.space), '
-            . 'delete (remove own skill), log_install (track an install for stats).';
+            . 'log_install (track an install for stats).';
     }
 
     public function parameters(): array
@@ -49,12 +48,12 @@ final class SpaceSkillsTool implements ToolInterface
             new EnumParameter(
                 'action',
                 'The operation to perform',
-                ['search', 'list', 'details', 'versions', 'reviews', 'file', 'install', 'update', 'publish', 'delete', 'log_install'],
+                ['search', 'list', 'details', 'versions', 'reviews', 'file', 'install', 'update', 'log_install'],
             ),
             new StringParameter('query', 'Search keywords (required for search)', required: false),
             new StringParameter('owner', 'GitHub username of the skill owner (required for details/versions/reviews/file/install)', required: false),
-            new StringParameter('name', 'Skill slug on coqui.space (required for details/versions/reviews/file/install)', required: false),
-            new StringParameter('skill_name', 'Local skill directory name (required for update/publish)', required: false),
+            new StringParameter('name', 'Skill slug on agentcoqui.com (required for details/versions/reviews/file/install)', required: false),
+            new StringParameter('skill_name', 'Local skill directory name (required for update)', required: false),
             new EnumParameter('sort', 'Sort order for list', ['updated', 'downloads', 'stars', 'name'], required: false),
             new StringParameter('tags', 'Comma-separated tag slugs to filter by (for list)', required: false),
             new NumberParameter('limit', 'Maximum results to return (1-50)', required: false),
@@ -78,10 +77,8 @@ final class SpaceSkillsTool implements ToolInterface
                 'file' => $this->file($input),
                 'install' => $this->install($input),
                 'update' => $this->update($input),
-                'publish' => $this->publish($input),
-                'delete' => $this->deleteSkill($input),
                 'log_install' => $this->logInstall($input),
-                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, details, versions, reviews, file, install, update, publish, delete, log_install"),
+                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, details, versions, reviews, file, install, update, log_install"),
             };
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage());
@@ -152,7 +149,7 @@ final class SpaceSkillsTool implements ToolInterface
         }
 
         $lines[] = '';
-        $lines[] = '*Use `space_skills(action: "details", owner: "OWNER", name: "SLUG")` to see full details.*';
+        $lines[] = '*Use `mods_skills(action: "details", owner: "OWNER", name: "SLUG")` to see full details.*';
 
         return ToolResult::success(implode("\n", $lines));
     }
@@ -181,7 +178,7 @@ final class SpaceSkillsTool implements ToolInterface
         foreach ($items as $item) {
             $name = (string) ($item['name'] ?? '');
             $displayName = (string) ($item['displayName'] ?? $name);
-            $owner = SpaceRegistry::extractOwner($item);
+            $owner = ModRegistry::extractOwner($item);
             $stats = (array) ($item['stats'] ?? []);
             $downloads = $this->formatNumber((int) ($stats['downloads'] ?? 0));
             $stars = $this->formatNumber((int) ($stats['stars'] ?? 0));
@@ -268,10 +265,10 @@ final class SpaceSkillsTool implements ToolInterface
 
         $lines[] = '';
         $lines[] = '### Quick Actions';
-        $lines[] = "- Install: `space_skills(action: \"install\", owner: \"{$owner}\", name: \"{$name}\")`";
-        $lines[] = "- Preview: `space_skills(action: \"file\", owner: \"{$owner}\", name: \"{$name}\")`";
-        $lines[] = "- Reviews: `space_skills(action: \"reviews\", owner: \"{$owner}\", name: \"{$name}\")`";
-        $lines[] = "- Versions: `space_skills(action: \"versions\", owner: \"{$owner}\", name: \"{$name}\")`";
+        $lines[] = "- Install: `mods_skills(action: \"install\", owner: \"{$owner}\", name: \"{$name}\")`";
+        $lines[] = "- Preview: `mods_skills(action: \"file\", owner: \"{$owner}\", name: \"{$name}\")`";
+        $lines[] = "- Reviews: `mods_skills(action: \"reviews\", owner: \"{$owner}\", name: \"{$name}\")`";
+        $lines[] = "- Versions: `mods_skills(action: \"versions\", owner: \"{$owner}\", name: \"{$name}\")`";
 
         return ToolResult::success(implode("\n", $lines));
     }
@@ -429,81 +426,7 @@ final class SpaceSkillsTool implements ToolInterface
         return ToolResult::success($result['message']);
     }
 
-    /**
-     * @param array<string, mixed> $input
-     */
-    private function publish(array $input): ToolResult
-    {
-        $skillName = (string) ($input['skill_name'] ?? '');
-
-        if ($skillName === '') {
-            return ToolResult::error('Parameter "skill_name" is required for publish (the local directory name).');
-        }
-
-        // Read the installed skills to find the local SKILL.md
-        $skills = $this->installer->list();
-        $found = null;
-
-        foreach ($skills as $skill) {
-            if ($skill['name'] === $skillName) {
-                $found = $skill;
-                break;
-            }
-        }
-
-        if ($found === null) {
-            return ToolResult::error("Skill '{$skillName}' not found in installed skills.");
-        }
-
-        // Check if it has an origin (already published)
-        $hasOrigin = $found['source'] === 'coqui.space' && $found['owner'] !== '' && $found['slug'] !== '';
-
-        // We need to read the SKILL.md to extract metadata for publishing
-        // The skill is installed locally, so we build the path
-        $isDisabled = $found['status'] === 'disabled';
-        $dirSuffix = $isDisabled ? $skillName . '.disabled' : $skillName;
-
-        // Read SKILL.md — this uses the skills dir from the installer (we don't expose that directly,
-        // so the publish action tells the user to check the skill and then provides instructions)
-
-        if ($hasOrigin) {
-            // Update existing skill
-            return ToolResult::success(
-                "Skill '{$skillName}' is already published on coqui.space as `{$found['owner']}/{$found['slug']}`. "
-                . "To update it, modify the local SKILL.md and then use the API:\n\n"
-                . "```\nspace_skills(action: \"update\", skill_name: \"{$skillName}\")\n```\n\n"
-                . 'Note: Publishing updates via the API requires a `COQUI_SPACE_API_TOKEN` with write access. '
-                . 'Set it via: `credentials(action: "set", key: "COQUI_SPACE_API_TOKEN", value: "YOUR_TOKEN")`',
-            );
-        }
-
-        return ToolResult::success(
-            "To publish skill '{$skillName}' to coqui.space:\n\n"
-            . "1. **Ensure you have an API token** — set via `credentials(action: \"set\", key: \"COQUI_SPACE_API_TOKEN\", value: \"YOUR_TOKEN\")`\n"
-            . "2. **Review the SKILL.md** — use `space_skills(action: \"file\", owner: \"preview\", name: \"{$skillName}\")` or read the local file\n"
-            . "3. **Submit for review** — use `space(action: \"submit\", type: \"skill\", source_url: \"REPO_URL\")`\n\n"
-            . 'Skills submitted by regular users go through a review process before being published.',
-        );
-    }
-
     // ── Helpers ──────────────────────────────────────────────────────
-
-    /**
-     * @param array<string, mixed> $input
-     */
-    private function deleteSkill(array $input): ToolResult
-    {
-        $owner = (string) ($input['owner'] ?? '');
-        $name = (string) ($input['name'] ?? '');
-
-        if ($owner === '' || $name === '') {
-            return ToolResult::error('Parameters "owner" and "name" are required for delete.');
-        }
-
-        $this->client->deleteSkill($owner, $name);
-
-        return ToolResult::success("Skill `{$owner}/{$name}` has been deleted (soft-delete to draft).");
-    }
 
     /**
      * @param array<string, mixed> $input

@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-use CoquiBot\SpaceManager\Installer\ToolkitInstaller;
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
+use CoquiBot\ModManager\Installer\ToolkitInstaller;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Config\ModRegistry;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 function createToolkitInstaller(MockHttpClient $http, string $dir): ToolkitInstaller
 {
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -73,7 +73,7 @@ test('state file tracks disabled toolkits', function () {
     $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
     createTestWorkspace($dir);
 
-    $stateFile = $dir . '/' . SpaceRegistry::STATE_FILE;
+    $stateFile = $dir . '/' . ModRegistry::STATE_FILE;
 
     // Write a state file with a disabled toolkit (format: {package: {constraint, disabledAt}})
     file_put_contents($stateFile, json_encode([
@@ -109,7 +109,7 @@ test('state file is created on disable', function () {
     $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
     createTestWorkspace($dir);
 
-    $stateFile = $dir . '/' . SpaceRegistry::STATE_FILE;
+    $stateFile = $dir . '/' . ModRegistry::STATE_FILE;
 
     // Verify no state file exists initially
     expect(file_exists($stateFile))->toBeFalse();
@@ -128,7 +128,7 @@ test('state file is created on disable', function () {
         ->and($state['disabled'])->toHaveKey('coquibot/coqui-toolkit-calculator');
 });
 
-// ── SpaceRegistry filtering ─────────────────────────────────────
+// ── ModRegistry filtering ───────────────────────────────────────
 
 test('list excludes non-Coqui packages', function () {
     $dir = sys_get_temp_dir() . '/coqui-toolkit-test-' . uniqid();
@@ -279,7 +279,7 @@ test('install rejects excluded core packages', function () {
     $http = new MockHttpClient([]);
     $installer = createToolkitInstaller($http, $dir);
 
-    $installer->install('coquibot/coqui-space-manager', null);
+    $installer->install('coquibot/coqui-toolkit-mod-manager', null);
 })->throws(\RuntimeException::class, 'core dependency');
 
 test('disable rejects excluded core packages', function () {
