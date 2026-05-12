@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 use CarmeloSantana\PHPAgents\Enum\ToolResultStatus;
 use CarmeloSantana\PHPAgents\Tool\ToolResult;
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
-use CoquiBot\SpaceManager\Installer\SkillInstaller;
-use CoquiBot\SpaceManager\Installer\ToolkitInstaller;
-use CoquiBot\SpaceManager\Tool\SpaceManageTool;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Config\ModRegistry;
+use CoquiBot\ModManager\Installer\SkillInstaller;
+use CoquiBot\ModManager\Installer\ToolkitInstaller;
+use CoquiBot\ModManager\Tool\ModsManageTool;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-function createManageTool(array $responses, ?string $skillDir = null, ?string $workspaceDir = null): SpaceManageTool
+function createManageTool(array $responses, ?string $skillDir = null, ?string $workspaceDir = null): ModsManageTool
 {
     $http = new MockHttpClient(array_map(
         static fn(array|string $r): MockResponse => is_string($r)
@@ -21,8 +21,8 @@ function createManageTool(array $responses, ?string $skillDir = null, ?string $w
         $responses,
     ));
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -36,7 +36,7 @@ function createManageTool(array $responses, ?string $skillDir = null, ?string $w
         }
     }
 
-    return new SpaceManageTool(
+    return new ModsManageTool(
         $client,
         new SkillInstaller($client, $sDir),
         new ToolkitInstaller($client, $wDir),
@@ -45,9 +45,9 @@ function createManageTool(array $responses, ?string $skillDir = null, ?string $w
 
 // ── Tool metadata ────────────────────────────────────────────────
 
-test('name returns space', function () {
+test('name returns mods', function () {
     $tool = createManageTool([]);
-    expect($tool->name())->toBe('space');
+    expect($tool->name())->toBe('mods');
 });
 
 test('description mentions all actions', function () {
@@ -58,11 +58,10 @@ test('description mentions all actions', function () {
         ->and($desc)->toContain('disable')
         ->and($desc)->toContain('enable')
         ->and($desc)->toContain('remove')
-        ->and($desc)->toContain('star')
-        ->and($desc)->toContain('unstar')
-        ->and($desc)->toContain('submit')
         ->and($desc)->toContain('tags')
-        ->and($desc)->toContain('search_all');
+    ->and($desc)->toContain('search_all')
+    ->and($desc)->not->toContain('collections')
+    ->and($desc)->not->toContain('notifications');
 });
 
 test('toFunctionSchema returns valid structure', function () {
@@ -70,7 +69,7 @@ test('toFunctionSchema returns valid structure', function () {
     $schema = $tool->toFunctionSchema();
 
     expect($schema['type'])->toBe('function')
-        ->and($schema['function']['name'])->toBe('space')
+        ->and($schema['function']['name'])->toBe('mods')
         ->and($schema['function']['parameters']['properties'])->toHaveKey('action');
 });
 
@@ -244,114 +243,6 @@ test('disable routes toolkit name correctly', function () {
 
     // The ToolkitInstaller should attempt to handle it
     expect($result)->toBeInstanceOf(ToolResult::class);
-});
-
-// ── Star action ──────────────────────────────────────────────────
-
-test('star sends correct request', function () {
-    $tool = createManageTool([['starred' => true]]);
-
-    $result = $tool->execute([
-        'action' => 'star',
-        'entity_type' => 'skill',
-        'owner' => 'testuser',
-        'name' => 'my-skill',
-    ]);
-
-    expect($result->content)->toContain('Starred')
-        ->and($result->content)->toContain('★');
-});
-
-test('star already starred shows appropriate message', function () {
-    $tool = createManageTool([['alreadyStarred' => true]]);
-
-    $result = $tool->execute([
-        'action' => 'star',
-        'entity_type' => 'skill',
-        'owner' => 'testuser',
-        'name' => 'my-skill',
-    ]);
-
-    expect($result->content)->toContain('already starred');
-});
-
-test('star requires all parameters', function () {
-    $tool = createManageTool([]);
-
-    $result = $tool->execute(['action' => 'star', 'entity_type' => 'skill']);
-
-    expect($result->status)->toBe(ToolResultStatus::Error)
-        ->and($result->content)->toContain('entity_type');
-});
-
-// ── Unstar action ────────────────────────────────────────────────
-
-test('unstar sends correct request', function () {
-    $tool = createManageTool([['unstarred' => true]]);
-
-    $result = $tool->execute([
-        'action' => 'unstar',
-        'entity_type' => 'toolkit',
-        'owner' => 'coquibot',
-        'name' => 'browser',
-    ]);
-
-    expect($result->content)->toContain('Unstarred');
-});
-
-test('unstar already unstarred shows message', function () {
-    $tool = createManageTool([['alreadyUnstarred' => true]]);
-
-    $result = $tool->execute([
-        'action' => 'unstar',
-        'entity_type' => 'skill',
-        'owner' => 'testuser',
-        'name' => 'my-skill',
-    ]);
-
-    expect($result->content)->toContain('was not starred');
-});
-
-test('unstar requires all parameters', function () {
-    $tool = createManageTool([]);
-
-    $result = $tool->execute(['action' => 'unstar']);
-
-    expect($result->status)->toBe(ToolResultStatus::Error);
-});
-
-// ── Submit action ────────────────────────────────────────────────
-
-test('submit creates submission', function () {
-    $tool = createManageTool([['id' => '42', 'status' => 'pending']]);
-
-    $result = $tool->execute([
-        'action' => 'submit',
-        'type' => 'skill',
-        'source_url' => 'https://github.com/user/skill',
-        'notes' => 'Please review this skill',
-    ]);
-
-    expect($result->content)->toContain('#42')
-        ->and($result->content)->toContain('moderator');
-});
-
-test('submit requires valid type', function () {
-    $tool = createManageTool([]);
-
-    $result = $tool->execute(['action' => 'submit', 'type' => 'invalid', 'source_url' => 'https://example.com']);
-
-    expect($result->status)->toBe(ToolResultStatus::Error)
-        ->and($result->content)->toContain('type');
-});
-
-test('submit requires source_url', function () {
-    $tool = createManageTool([]);
-
-    $result = $tool->execute(['action' => 'submit', 'type' => 'toolkit']);
-
-    expect($result->status)->toBe(ToolResultStatus::Error)
-        ->and($result->content)->toContain('source_url');
 });
 
 // ── Tags action ──────────────────────────────────────────────────
@@ -557,35 +448,26 @@ test('empty action returns error', function () {
 
 // ── Error handling ───────────────────────────────────────────────
 
-test('API errors are caught and returned as ToolResult errors', function () {
-    $http = new MockHttpClient([
-        new MockResponse('{"error": "Unauthorized"}', ['http_code' => 401]),
+test('migrated publish actions are rejected by the manager tool', function () {
+    $tool = createManageTool([]);
+
+    foreach (['star', 'unstar', 'submit', 'collections', 'review', 'notifications'] as $action) {
+        $result = $tool->execute(['action' => $action]);
+
+        expect($result->status)->toBe(ToolResultStatus::Error)
+            ->and($result->content)->toContain('Unknown action');
+    }
+});
+
+// ── Health ───────────────────────────────────────────────────────────
+
+test('health returns formatted status', function () {
+    $tool = createManageTool([
+        ['status' => 'ok', 'version' => '0.1.0', 'timestamp' => '2024-01-15T10:00:00Z'],
     ]);
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
-        static fn(): string => '',
-        $http,
-    );
+    $result = $tool->execute(['action' => 'health']);
 
-    $sDir = sys_get_temp_dir() . '/coqui-manage-skill-test-' . uniqid();
-    $wDir = sys_get_temp_dir() . '/coqui-manage-workspace-test-' . uniqid();
-    mkdir($sDir, 0o755, true);
-    mkdir($wDir, 0o755, true);
-
-    $tool = new SpaceManageTool(
-        $client,
-        new SkillInstaller($client, $sDir),
-        new ToolkitInstaller($client, $wDir),
-    );
-
-    $result = $tool->execute([
-        'action' => 'star',
-        'entity_type' => 'skill',
-        'owner' => 'testuser',
-        'name' => 'my-skill',
-    ]);
-
-    expect($result->status)->toBe(ToolResultStatus::Error)
-        ->and($result->content)->toContain('401');
+    expect($result->content)->toContain('ok')
+        ->and($result->content)->toContain('0.1.0');
 });

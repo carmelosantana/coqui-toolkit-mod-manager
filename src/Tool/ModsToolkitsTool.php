@@ -2,42 +2,42 @@
 
 declare(strict_types=1);
 
-namespace CoquiBot\SpaceManager\Tool;
+namespace CoquiBot\ModManager\Tool;
 
 use CarmeloSantana\PHPAgents\Contract\ToolInterface;
 use CarmeloSantana\PHPAgents\Tool\Parameter\EnumParameter;
 use CarmeloSantana\PHPAgents\Tool\Parameter\NumberParameter;
 use CarmeloSantana\PHPAgents\Tool\Parameter\StringParameter;
 use CarmeloSantana\PHPAgents\Tool\ToolResult;
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
-use CoquiBot\SpaceManager\Installer\ToolkitInstaller;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Config\ModRegistry;
+use CoquiBot\ModManager\Installer\ToolkitInstaller;
 
 /**
- * Agent-facing tool for discovering and managing toolkits on Coqui Space.
+ * Agent-facing tool for discovering and managing toolkits on Coqui Mods.
  *
- * Actions: search, popular, details, reviews, install, update, publish
+ * Actions: search, popular, details, reviews, install, update
  */
-final class SpaceToolkitsTool implements ToolInterface
+final class ModsToolkitsTool implements ToolInterface
 {
     public function __construct(
-        private readonly SpaceClient $client,
+        private readonly ModClient $client,
         private readonly ToolkitInstaller $installer,
     ) {}
 
     public function name(): string
     {
-        return 'space_toolkits';
+        return 'mods_toolkits';
     }
 
     public function description(): string
     {
-        return 'Discover, install, and manage Composer toolkits from Coqui Space. '
+        return 'Discover, install, and manage Composer toolkits from Coqui Mods. '
             . 'Actions: search (keyword search), list (browse with sorting/tags — cursor-paginated), '
             . 'popular (browse popular — page-based, legacy), '
             . 'details (full metadata by package name or owner/name), '
             . 'reviews (community reviews), install (composer require into workspace), '
-            . 'update (composer update), publish (register toolkit on coqui.space).';
+            . 'update (composer update).';
     }
 
     public function parameters(): array
@@ -46,16 +46,12 @@ final class SpaceToolkitsTool implements ToolInterface
             new EnumParameter(
                 'action',
                 'The operation to perform',
-                ['search', 'list', 'popular', 'details', 'reviews', 'install', 'update', 'publish'],
+                ['search', 'list', 'popular', 'details', 'reviews', 'install', 'update'],
             ),
             new StringParameter('query', 'Search keywords (required for search)', required: false),
-            new StringParameter('package', 'Full Composer package name in vendor/package format (for details/install/update/publish)', required: false),
+            new StringParameter('package', 'Full Composer package name in vendor/package format (for details/install/update)', required: false),
             new StringParameter('owner', 'GitHub username of the toolkit owner (for details/reviews)', required: false),
-            new StringParameter('name', 'Toolkit slug on coqui.space (for details/reviews)', required: false),
-            new StringParameter('display_name', 'Display name for publishing', required: false),
-            new StringParameter('description', 'Description for publishing', required: false),
-            new StringParameter('repository', 'Repository URL for publishing', required: false),
-            new StringParameter('tags', 'Comma-separated tags for publishing', required: false),
+            new StringParameter('name', 'Toolkit slug on agentcoqui.com (for details/reviews)', required: false),
             new EnumParameter('sort', 'Sort order for list', ['downloads', 'favers', 'newest', 'name'], required: false),
             new StringParameter('tags', 'Comma-separated tag slugs to filter by (for list)', required: false),
             new NumberParameter('per_page', 'Results per page for search/popular (1-100, default 15)', required: false),
@@ -79,8 +75,7 @@ final class SpaceToolkitsTool implements ToolInterface
                 'reviews' => $this->reviews($input),
                 'install' => $this->install($input),
                 'update' => $this->update($input),
-                'publish' => $this->publish($input),
-                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, popular, details, reviews, install, update, publish"),
+                default => ToolResult::error("Unknown action: '{$action}'. Valid actions: search, list, popular, details, reviews, install, update"),
             };
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage());
@@ -138,7 +133,7 @@ final class SpaceToolkitsTool implements ToolInterface
 
         foreach ($items as $item) {
             $name = (string) ($item['packageName'] ?? $item['name'] ?? '');
-            $owner = SpaceRegistry::extractOwner($item);
+            $owner = ModRegistry::extractOwner($item);
             $downloads = $this->formatNumber((int) ($item['downloads'] ?? 0));
             $favers = $this->formatNumber((int) ($item['favers'] ?? 0));
             $verified = !empty($item['verified_publisher']) ? '✓' : '—';
@@ -155,7 +150,7 @@ final class SpaceToolkitsTool implements ToolInterface
         }
 
         $lines[] = '';
-        $lines[] = '*Use `space_toolkits(action: "details", package: "vendor/package")` to see full details.*';
+        $lines[] = '*Use `mods_toolkits(action: "details", package: "vendor/package")` to see full details.*';
 
         return ToolResult::success(implode("\n", $lines));
     }
@@ -203,7 +198,7 @@ final class SpaceToolkitsTool implements ToolInterface
         }
 
         $lines[] = '';
-        $lines[] = '*Use `space_toolkits(action: "details", package: "vendor/package")` to see full details.*';
+        $lines[] = '*Use `mods_toolkits(action: "details", package: "vendor/package")` to see full details.*';
 
         return ToolResult::success(implode("\n", $lines));
     }
@@ -351,49 +346,6 @@ final class SpaceToolkitsTool implements ToolInterface
         return ToolResult::success($result['message']);
     }
 
-    /**
-     * @param array<string, mixed> $input
-     */
-    private function publish(array $input): ToolResult
-    {
-        $package = (string) ($input['package'] ?? '');
-        if ($package === '' || !str_contains($package, '/')) {
-            return ToolResult::error('Parameter "package" is required in vendor/package format for publish.');
-        }
-
-        $displayName = (string) ($input['display_name'] ?? '');
-        $description = (string) ($input['description'] ?? '');
-        $repository = (string) ($input['repository'] ?? '');
-        $tags = (string) ($input['tags'] ?? '');
-
-        $data = ['packageName' => $package];
-
-        if ($displayName !== '') {
-            $data['displayName'] = $displayName;
-        }
-        if ($description !== '') {
-            $data['description'] = $description;
-        }
-        if ($repository !== '') {
-            $data['repository'] = $repository;
-        }
-        if ($tags !== '') {
-            $data['tags'] = array_map('trim', explode(',', $tags));
-        }
-
-        $result = $this->client->createToolkit($data);
-
-        $status = (string) ($result['status'] ?? 'unknown');
-        $verified = !empty($result['verified_publisher']);
-
-        return ToolResult::success(
-            "Toolkit `{$package}` registered on coqui.space.\n"
-            . "**Status:** {$status}\n"
-            . '**Verified Publisher:** ' . ($verified ? 'Yes ✓' : 'No') . "\n\n"
-            . 'The toolkit is now discoverable on Coqui Space.',
-        );
-    }
-
     // ── Detail helpers ───────────────────────────────────────────────
 
     private function detailsByPackage(string $package): ToolResult
@@ -418,7 +370,7 @@ final class SpaceToolkitsTool implements ToolInterface
 
         $lines = ["## {$name}"];
         $lines[] = '';
-        $lines[] = $this->truncate($description, 500);
+        $lines[] = $this->truncate($description, 300);
         $lines[] = '';
         $lines[] = "**Type:** {$type}";
         $lines[] = "**Repository:** {$repository}";
@@ -452,7 +404,7 @@ final class SpaceToolkitsTool implements ToolInterface
 
         $lines[] = '';
         $lines[] = '### Quick Actions';
-        $lines[] = "- Install: `space_toolkits(action: \"install\", package: \"{$name}\")`";
+        $lines[] = "- Install: `mods_toolkits(action: \"install\", package: \"{$name}\")`";
 
         return ToolResult::success(implode("\n", $lines));
     }
@@ -476,7 +428,7 @@ final class SpaceToolkitsTool implements ToolInterface
 
         $lines = ["## {$displayName}"];
         $lines[] = '';
-        $lines[] = $this->truncate($description, 500);
+        $lines[] = $this->truncate($description, 300);
         $lines[] = '';
         $ownerDisplay = (string) ($ownerInfo['displayName'] ?? $owner);
         $ownerHandle = (string) ($ownerInfo['handle'] ?? $owner);
@@ -512,8 +464,8 @@ final class SpaceToolkitsTool implements ToolInterface
         $lines[] = '';
         $lines[] = '### Quick Actions';
         if ($packageName !== '') {
-            $lines[] = "- Install: `space_toolkits(action: \"install\", package: \"{$packageName}\")`";
-            $lines[] = "- Reviews: `space_toolkits(action: \"reviews\", owner: \"{$owner}\", name: \"{$name}\")`";
+            $lines[] = "- Install: `mods_toolkits(action: \"install\", package: \"{$packageName}\")`";
+            $lines[] = "- Reviews: `mods_toolkits(action: \"reviews\", owner: \"{$owner}\", name: \"{$name}\")`";
         }
 
         return ToolResult::success(implode("\n", $lines));

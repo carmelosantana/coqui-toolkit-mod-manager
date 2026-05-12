@@ -2,26 +2,25 @@
 
 declare(strict_types=1);
 
-namespace CoquiBot\SpaceManager\Config;
+namespace CoquiBot\ModManager\Config;
 
 /**
  * Registry constants, excluded package lists, and classification helpers.
  */
-final class SpaceRegistry
+final class ModRegistry
 {
-    public const string DEFAULT_BASE_URL = 'https://coqui.space/api/v1';
+    public const string DEFAULT_BASE_URL = 'https://agentcoqui.com/api/v1';
 
-    public const string ORIGIN_FILE = '.space-origin.json';
+    public const string ORIGIN_FILE = '.mods-origin.json';
 
-    public const string STATE_FILE = '.space-state.json';
+    public const string STATE_FILE = '.mods-state.json';
 
     /**
      * Core packages that should never appear in "installed toolkits" listings
-     * or be allowed to disable/remove via the space manager.
+    * or be allowed to disable/remove via the mod manager.
      */
     private const array EXCLUDED_PACKAGES = [
-        'coquibot/coqui-space-manager',
-        'coquibot/coqui-toolkit-space-manager',
+        'coquibot/coqui-toolkit-mod-manager',
         'coquibot/coqui-toolkit-composer',
         'coquibot/coqui-toolkit-packagist',
         'carmelosantana/php-agents',
@@ -63,7 +62,7 @@ final class SpaceRegistry
         return str_starts_with($lower, 'coquibot/')
             || str_starts_with($lower, 'coqui-bot/')
             || str_contains($lower, 'coqui-toolkit-')
-            || str_contains($lower, 'coqui-space-');
+            || str_contains($lower, 'coqui-mod-');
     }
 
     /**

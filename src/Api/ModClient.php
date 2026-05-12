@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace CoquiBot\SpaceManager\Api;
+namespace CoquiBot\ModManager\Api;
 
-use CoquiBot\SpaceManager\Config\SpaceRegistry;
+use CoquiBot\ModManager\Config\ModRegistry;
 use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * HTTP client for the Coqui Space REST API.
+ * HTTP client for the Coqui Mods REST API.
  *
  * Uses closure-based URL and token resolution for hot-reload compatibility —
  * CredentialTool::set() → putenv() takes effect on the next API call.
  */
-final class SpaceClient
+final class ModClient
 {
     private const int TIMEOUT = 30;
 
@@ -174,7 +174,7 @@ final class SpaceClient
     }
 
     /**
-     * Create a new skill on Coqui Space.
+    * Create a new skill on Coqui Mods.
      *
      * @param array<string, mixed> $data
      * @return array<string, mixed>
@@ -193,6 +193,31 @@ final class SpaceClient
     public function updateSkill(string $owner, string $name, array $data): array
     {
         return $this->put("/skills/{$owner}/{$name}", $data);
+    }
+
+    /**
+     * Delete a skill (soft-delete).
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteSkill(string $owner, string $name): array
+    {
+        return $this->delete("/skills/{$owner}/{$name}");
+    }
+
+    /**
+     * Log a skill install (fire-and-forget stats tracking).
+     *
+     * @return array<string, mixed>
+     */
+    public function logSkillInstall(string $owner, string $name, ?string $clientVersion = null): array
+    {
+        $data = [];
+        if ($clientVersion !== null) {
+            $data['clientVersion'] = $clientVersion;
+        }
+
+        return $this->post("/skills/{$owner}/{$name}/install", $data);
     }
 
     // ── Toolkits ─────────────────────────────────────────────────────
@@ -282,7 +307,7 @@ final class SpaceClient
     }
 
     /**
-     * Register a new toolkit on Coqui Space.
+    * Register a new toolkit on Coqui Mods.
      *
      * @param array<string, mixed> $data
      * @return array<string, mixed>
@@ -301,6 +326,16 @@ final class SpaceClient
     public function updateToolkit(string $owner, string $name, array $data): array
     {
         return $this->put("/toolkits/{$owner}/{$name}", $data);
+    }
+
+    /**
+     * Delete a toolkit (soft-delete).
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteToolkit(string $owner, string $name): array
+    {
+        return $this->delete("/toolkits/{$owner}/{$name}");
     }
 
     /**
@@ -367,6 +402,21 @@ final class SpaceClient
         return $this->post('/submissions', $data);
     }
 
+    /**
+     * List all submissions (admin/moderator only).
+     *
+     * @return array<string, mixed>
+     */
+    public function listSubmissions(int $limit = 20, ?string $cursor = null): array
+    {
+        $params = ['limit' => $limit];
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
+
+        return $this->get('/submissions', $params);
+    }
+
     // ── Tags ─────────────────────────────────────────────────────────
 
     /**
@@ -403,6 +453,341 @@ final class SpaceClient
         }
 
         return $this->get('/search/all', $params);
+    }
+
+    // ── Reviews ──────────────────────────────────────────────────────
+
+    /**
+     * Post a review on a skill or toolkit.
+     *
+     * @return array<string, mixed>
+     */
+    public function createReview(string $entityType, string $owner, string $name, int $rating, ?string $title = null, ?string $body = null): array
+    {
+        $data = ['rating' => $rating];
+        if ($title !== null) {
+            $data['title'] = $title;
+        }
+        if ($body !== null) {
+            $data['body'] = $body;
+        }
+
+        return $this->post("/{$entityType}s/{$owner}/{$name}/reviews", $data);
+    }
+
+    /**
+     * Update a review.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function updateReview(int $id, array $data): array
+    {
+        return $this->patch("/reviews/{$id}", $data);
+    }
+
+    /**
+     * Delete a review.
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteReview(int $id): array
+    {
+        return $this->delete("/reviews/{$id}");
+    }
+
+    // ── Collections ──────────────────────────────────────────────────
+
+    /**
+     * List public collections.
+     *
+     * @return array<string, mixed>
+     */
+    public function listCollections(int $limit = 20, ?string $cursor = null): array
+    {
+        $params = ['limit' => $limit];
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
+
+        return $this->get('/collections', $params);
+    }
+
+    /**
+     * Create a new collection.
+     *
+     * @return array<string, mixed>
+     */
+    public function createCollection(string $name, ?string $description = null, bool $isPublic = true): array
+    {
+        $data = ['name' => $name, 'isPublic' => $isPublic];
+        if ($description !== null) {
+            $data['description'] = $description;
+        }
+
+        return $this->post('/collections', $data);
+    }
+
+    /**
+     * Get a collection with its items.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCollection(int $id): array
+    {
+        return $this->get("/collections/{$id}");
+    }
+
+    /**
+     * Update a collection.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function updateCollection(int $id, array $data): array
+    {
+        return $this->patch("/collections/{$id}", $data);
+    }
+
+    /**
+     * Delete a collection.
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteCollection(int $id): array
+    {
+        return $this->delete("/collections/{$id}");
+    }
+
+    /**
+     * Add an item to a collection.
+     *
+     * @return array<string, mixed>
+     */
+    public function addCollectionItem(int $collectionId, string $entityType, int $entityId, ?string $note = null): array
+    {
+        $data = ['entityType' => $entityType, 'entityId' => $entityId];
+        if ($note !== null) {
+            $data['note'] = $note;
+        }
+
+        return $this->post("/collections/{$collectionId}/items", $data);
+    }
+
+    /**
+     * Remove an item from a collection.
+     *
+     * @return array<string, mixed>
+     */
+    public function removeCollectionItem(int $collectionId, string $entityType, int $entityId): array
+    {
+        $url = $this->baseUrl() . "/collections/{$collectionId}/items";
+
+        try {
+            $response = $this->http->request('DELETE', $url, [
+                'timeout' => self::TIMEOUT,
+                'headers' => $this->headers(true),
+                'json' => ['entityType' => $entityType, 'entityId' => $entityId],
+            ]);
+
+            return $this->decodeJson($response->getContent());
+        } catch (HttpExceptionInterface $e) {
+            throw new \RuntimeException(sprintf(
+                'DELETE /collections/%d/items failed: HTTP %d — %s',
+                $collectionId,
+                $e->getResponse()->getStatusCode(),
+                $this->extractError($e),
+            ));
+        }
+    }
+
+    // ── User Account (/me) ───────────────────────────────────────────
+
+    /**
+     * Update the authenticated user's profile.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function updateProfile(array $data): array
+    {
+        return $this->patch('/me', $data);
+    }
+
+    /**
+     * Get the authenticated user's masked API key info.
+     *
+     * @return array<string, mixed>
+     */
+    public function apiKey(): array
+    {
+        return $this->get('/me/api-key');
+    }
+
+    /**
+     * Regenerate the authenticated user's API key.
+     *
+     * @return array<string, mixed>
+     */
+    public function regenerateApiKey(): array
+    {
+        return $this->post('/me/api-key', []);
+    }
+
+    /**
+     * List the authenticated user's skills.
+     *
+     * @return array<string, mixed>
+     */
+    public function mySkills(int $limit = 20, ?string $cursor = null): array
+    {
+        $params = ['limit' => $limit];
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
+
+        return $this->get('/me/skills', $params);
+    }
+
+    /**
+     * List the authenticated user's toolkits.
+     *
+     * @return array<string, mixed>
+     */
+    public function myToolkits(): array
+    {
+        return $this->get('/me/toolkits');
+    }
+
+    /**
+     * List the authenticated user's collections.
+     *
+     * @return array<string, mixed>
+     */
+    public function myCollections(): array
+    {
+        return $this->get('/me/collections');
+    }
+
+    /**
+     * List the authenticated user's starred items.
+     *
+     * @return array<string, mixed>
+     */
+    public function myStars(int $limit = 20, ?string $cursor = null): array
+    {
+        $params = ['limit' => $limit];
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
+
+        return $this->get('/me/stars', $params);
+    }
+
+    /**
+     * List the authenticated user's install history.
+     *
+     * @return array<string, mixed>
+     */
+    public function myInstalls(int $limit = 50, ?string $cursor = null): array
+    {
+        $params = ['limit' => $limit];
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
+
+        return $this->get('/me/installs', $params);
+    }
+
+    /**
+     * List the authenticated user's submissions.
+     *
+     * @return array<string, mixed>
+     */
+    public function mySubmissions(): array
+    {
+        return $this->get('/me/submissions');
+    }
+
+    /**
+     * Get the authenticated user's analytics.
+     *
+     * @return array<string, mixed>
+     */
+    public function myAnalytics(int $days = 30): array
+    {
+        return $this->get('/me/analytics', ['days' => $days]);
+    }
+
+    /**
+     * Get the authenticated user's notifications.
+     *
+     * @return array<string, mixed>
+     */
+    public function myNotifications(int $limit = 50, ?bool $unread = null): array
+    {
+        $params = ['limit' => $limit];
+        if ($unread !== null) {
+            $params['unread'] = $unread ? 'true' : 'false';
+        }
+
+        return $this->get('/me/notifications', $params);
+    }
+
+    /**
+     * Mark notifications as read.
+     *
+     * @param array<string, mixed> $data  e.g. ['all' => true] or ['id' => 123]
+     * @return array<string, mixed>
+     */
+    public function markNotificationsRead(array $data): array
+    {
+        return $this->post('/me/notifications', $data);
+    }
+
+    // ── Submissions (management) ─────────────────────────────────────
+
+    /**
+     * Get a submission by ID.
+     *
+     * @return array<string, mixed>
+     */
+    public function getSubmission(int $id): array
+    {
+        return $this->get("/submissions/{$id}");
+    }
+
+    /**
+     * Review a submission (approve/reject).
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function reviewSubmission(int $id, array $data): array
+    {
+        return $this->put("/submissions/{$id}", $data);
+    }
+
+    /**
+     * Delete a submission.
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteSubmission(int $id): array
+    {
+        return $this->delete("/submissions/{$id}");
+    }
+
+    // ── Health ────────────────────────────────────────────────────────
+
+    /**
+     * Check API health status.
+     *
+     * @return array<string, mixed>
+     */
+    public function healthCheck(): array
+    {
+        return $this->get('/health');
     }
 
     // ── HTTP primitives ──────────────────────────────────────────────
@@ -490,6 +875,32 @@ final class SpaceClient
     }
 
     /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function patch(string $path, array $data): array
+    {
+        $url = $this->baseUrl() . $path;
+
+        try {
+            $response = $this->http->request('PATCH', $url, [
+                'timeout' => self::TIMEOUT,
+                'headers' => $this->headers(true),
+                'json' => $data,
+            ]);
+
+            return $this->decodeJson($response->getContent());
+        } catch (HttpExceptionInterface $e) {
+            throw new \RuntimeException(sprintf(
+                'PATCH %s failed: HTTP %d — %s',
+                $path,
+                $e->getResponse()->getStatusCode(),
+                $this->extractError($e),
+            ));
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function delete(string $path): array
@@ -534,7 +945,7 @@ final class SpaceClient
     {
         $headers = [
             'Accept' => 'application/json',
-            'User-Agent' => 'coqui-space-manager/0.1.0',
+            'User-Agent' => 'coqui-toolkit-mod-manager/0.1.0',
         ];
 
         if ($withAuth) {

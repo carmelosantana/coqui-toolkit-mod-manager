@@ -1,6 +1,6 @@
 {
-    "name": "coquibot/coqui-space-manager",
-    "description": "Coqui Space integration — discover, install, and manage skills and toolkits from coqui.space",
+    "name": "coquibot/coqui-toolkit-mod-manager",
+    "description": "Coqui Mods manager integration — discover, install, and manage mods from agentcoqui.com",
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -11,7 +11,7 @@
     "keywords": [
         "php-agents",
         "coqui",
-        "coqui-space",
+        "mods",
         "skills",
         "toolkits",
         "marketplace"
@@ -20,21 +20,24 @@
         "php": "^8.4",
         "ext-json": "*",
         "ext-zip": "*",
-        "symfony/http-client": "^7.0"
+        "symfony/http-client": "^7.4 || ^8.0"
     },
     "require-dev": {
-        "carmelosantana/php-agents": "^0.8",
+        "carmelosantana/php-agents": "^0.12 || ^0.13",
         "pestphp/pest": "^3.0",
         "phpstan/phpstan": "^2.0"
     },
     "autoload": {
         "psr-4": {
-            "CoquiBot\\SpaceManager\\": "src/"
+            "CoquiBot\\ModManager\\": "src/"
         }
     },
     "autoload-dev": {
+        "files": [
+            "stubs/coqui_repl_contracts.php"
+        ],
         "psr-4": {
-            "CoquiBot\\SpaceManager\\Tests\\": "tests/"
+            "CoquiBot\\ModManager\\Tests\\": "tests/"
         }
     },
     "config": {
@@ -51,31 +54,29 @@
     "extra": {
         "php-agents": {
             "toolkits": [
-                "CoquiBot\\SpaceManager\\SpaceManagerToolkit"
+                "CoquiBot\\ModManager\\ModManagerToolkit"
             ],
-            "description": "Discover, install, and manage skills and toolkits from Coqui Space",
+            "description": "Discover, install, and manage mods from agentcoqui.com",
             "credentials": {
-                "COQUI_SPACE_API_TOKEN": {
-                    "description": "API token for coqui.space — enables starring, publishing, and managing your content. Generate one at https://coqui.space/dashboard/api-keys",
+                "COQUI_MODS_API_TOKEN": {
+                    "description": "API token for agentcoqui.com — enables authenticated read context here and is reused by the mod-publish toolkit for write actions. Generate one at https://agentcoqui.com/dashboard/api-keys",
                     "optional": true
                 },
-                "COQUI_SPACE_URL": {
-                    "description": "Override the Coqui Space API base URL (default: https://coqui.space/api/v1)",
+                "COQUI_MODS_URL": {
+                    "description": "Override the Coqui Mods API base URL (default: https://agentcoqui.com/api/v1)",
                     "optional": true
                 }
             },
             "gated": {
-                "space_skills": [
+                "mods_skills": [
                     {"action": "install"},
-                    {"action": "update"},
-                    {"action": "publish"}
+                    {"action": "update"}
                 ],
-                "space_toolkits": [
+                "mods_toolkits": [
                     {"action": "install"},
-                    {"action": "update"},
-                    {"action": "publish"}
+                    {"action": "update"}
                 ],
-                "space": [
+                "mods": [
                     {"action": "disable"},
                     {"action": "enable"},
                     {"action": "remove"}

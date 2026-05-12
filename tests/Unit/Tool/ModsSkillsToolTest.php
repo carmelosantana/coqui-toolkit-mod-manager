@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 use CarmeloSantana\PHPAgents\Enum\ToolResultStatus;
 use CarmeloSantana\PHPAgents\Tool\ToolResult;
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Installer\SkillInstaller;
-use CoquiBot\SpaceManager\Tool\SpaceSkillsTool;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Installer\SkillInstaller;
+use CoquiBot\ModManager\Tool\ModsSkillsTool;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-function createSkillsTool(array $responses): SpaceSkillsTool
+function createSkillsTool(array $responses): ModsSkillsTool
 {
     $http = new MockHttpClient(array_map(
         static fn(array|string $r): MockResponse => is_string($r)
@@ -19,8 +19,8 @@ function createSkillsTool(array $responses): SpaceSkillsTool
         $responses,
     ));
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -32,14 +32,14 @@ function createSkillsTool(array $responses): SpaceSkillsTool
 
     $installer = new SkillInstaller($client, $dir);
 
-    return new SpaceSkillsTool($client, $installer);
+    return new ModsSkillsTool($client, $installer);
 }
 
 // ── Tool metadata ────────────────────────────────────────────────
 
-test('name returns space_skills', function () {
+test('name returns mods_skills', function () {
     $tool = createSkillsTool([]);
-    expect($tool->name())->toBe('space_skills');
+    expect($tool->name())->toBe('mods_skills');
 });
 
 test('description mentions all actions', function () {
@@ -50,7 +50,9 @@ test('description mentions all actions', function () {
         ->and($desc)->toContain('list')
         ->and($desc)->toContain('details')
         ->and($desc)->toContain('install')
-        ->and($desc)->toContain('publish');
+    ->and($desc)->toContain('log_install')
+    ->and($desc)->not->toContain('publish')
+    ->and($desc)->not->toContain('delete');
 });
 
 test('parameters include action enum', function () {
@@ -68,7 +70,7 @@ test('toFunctionSchema returns valid schema', function () {
 
     expect($schema)->toHaveKey('type')
         ->and($schema['type'])->toBe('function')
-        ->and($schema['function']['name'])->toBe('space_skills')
+        ->and($schema['function']['name'])->toBe('mods_skills')
         ->and($schema['function']['parameters']['properties'])->toHaveKey('action');
 });
 
@@ -316,26 +318,6 @@ test('update requires skill_name', function () {
         ->and($result->content)->toContain('skill_name');
 });
 
-// ── Publish action ───────────────────────────────────────────────
-
-test('publish requires skill_name', function () {
-    $tool = createSkillsTool([]);
-
-    $result = $tool->execute(['action' => 'publish']);
-
-    expect($result->status)->toBe(ToolResultStatus::Error)
-        ->and($result->content)->toContain('skill_name');
-});
-
-test('publish with non-existent skill returns error', function () {
-    $tool = createSkillsTool([]);
-
-    $result = $tool->execute(['action' => 'publish', 'skill_name' => 'does-not-exist']);
-
-    expect($result->status)->toBe(ToolResultStatus::Error)
-        ->and($result->content)->toContain('not found');
-});
-
 // ── Unknown action ───────────────────────────────────────────────
 
 test('unknown action returns error', function () {
@@ -362,8 +344,8 @@ test('API errors are caught and returned as ToolResult errors', function () {
         new MockResponse('{"error": "Internal server error"}', ['http_code' => 500]),
     ]);
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -371,10 +353,33 @@ test('API errors are caught and returned as ToolResult errors', function () {
     $dir = sys_get_temp_dir() . '/coqui-skills-tool-test-' . uniqid();
     mkdir($dir, 0o755, true);
 
-    $tool = new SpaceSkillsTool($client, new SkillInstaller($client, $dir));
+    $tool = new ModsSkillsTool($client, new SkillInstaller($client, $dir));
 
     $result = $tool->execute(['action' => 'search', 'query' => 'test']);
 
     expect($result->status)->toBe(ToolResultStatus::Error)
         ->and($result->content)->toContain('500');
+});
+
+test('migrated publish actions are rejected by the skills tool', function () {
+    $tool = createSkillsTool([]);
+
+    foreach (['publish', 'delete'] as $action) {
+        $result = $tool->execute(['action' => $action]);
+
+        expect($result->status)->toBe(ToolResultStatus::Error)
+            ->and($result->content)->toContain('Unknown action');
+    }
+});
+
+// ── Log Install ──────────────────────────────────────────────────────
+
+test('log_install returns success', function () {
+    $tool = createSkillsTool([
+        ['success' => true],
+    ]);
+
+    $result = $tool->execute(['action' => 'log_install', 'owner' => 'testuser', 'name' => 'my-skill']);
+
+    expect($result->content)->toContain('Install');
 });

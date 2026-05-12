@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 use CarmeloSantana\PHPAgents\Enum\ToolResultStatus;
 use CarmeloSantana\PHPAgents\Tool\ToolResult;
-use CoquiBot\SpaceManager\Api\SpaceClient;
-use CoquiBot\SpaceManager\Installer\ToolkitInstaller;
-use CoquiBot\SpaceManager\Tool\SpaceToolkitsTool;
+use CoquiBot\ModManager\Api\ModClient;
+use CoquiBot\ModManager\Installer\ToolkitInstaller;
+use CoquiBot\ModManager\Tool\ModsToolkitsTool;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-function createToolkitsTool(array $responses): SpaceToolkitsTool
+function createToolkitsTool(array $responses): ModsToolkitsTool
 {
     $http = new MockHttpClient(array_map(
         static fn(array|string $r): MockResponse => is_string($r)
@@ -19,8 +19,8 @@ function createToolkitsTool(array $responses): SpaceToolkitsTool
         $responses,
     ));
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -32,14 +32,14 @@ function createToolkitsTool(array $responses): SpaceToolkitsTool
 
     $installer = new ToolkitInstaller($client, $dir);
 
-    return new SpaceToolkitsTool($client, $installer);
+    return new ModsToolkitsTool($client, $installer);
 }
 
 // ── Tool metadata ────────────────────────────────────────────────
 
-test('name returns space_toolkits', function () {
+test('name returns mods_toolkits', function () {
     $tool = createToolkitsTool([]);
-    expect($tool->name())->toBe('space_toolkits');
+    expect($tool->name())->toBe('mods_toolkits');
 });
 
 test('description mentions all actions', function () {
@@ -52,7 +52,9 @@ test('description mentions all actions', function () {
         ->and($desc)->toContain('details')
         ->and($desc)->toContain('reviews')
         ->and($desc)->toContain('install')
-        ->and($desc)->toContain('publish');
+        ->and($desc)->toContain('update')
+        ->and($desc)->not->toContain('publish')
+        ->and($desc)->not->toContain('delete');
 });
 
 test('toFunctionSchema returns valid structure', function () {
@@ -60,7 +62,7 @@ test('toFunctionSchema returns valid structure', function () {
     $schema = $tool->toFunctionSchema();
 
     expect($schema['type'])->toBe('function')
-        ->and($schema['function']['name'])->toBe('space_toolkits')
+        ->and($schema['function']['name'])->toBe('mods_toolkits')
         ->and($schema['function']['parameters']['properties'])->toHaveKey('action')
         ->and($schema['function']['parameters'])->toHaveKey('required');
 });
@@ -113,7 +115,7 @@ test('search shows next page hint when available', function () {
         [
             'results' => [['name' => 'coquibot/something', 'downloads' => 10, 'favers' => 1, 'description' => 'Test']],
             'total' => 50,
-            'next' => 'https://coqui.space/api/v1/search.json?q=test&page=2',
+            'next' => 'https://agentcoqui.com/api/v1/search.json?q=test&page=2',
         ],
     ]);
 
@@ -358,37 +360,6 @@ test('update requires package in vendor/name format', function () {
     expect($result->status)->toBe(ToolResultStatus::Error);
 });
 
-// ── Publish action ───────────────────────────────────────────────
-
-test('publish requires package in vendor/name format', function () {
-    $tool = createToolkitsTool([]);
-
-    $result = $tool->execute(['action' => 'publish']);
-
-    expect($result->status)->toBe(ToolResultStatus::Error)
-        ->and($result->content)->toContain('package');
-});
-
-test('publish sends correct data to API', function () {
-    $tool = createToolkitsTool([
-        [
-            'status' => 'published',
-            'verified_publisher' => false,
-        ],
-    ]);
-
-    $result = $tool->execute([
-        'action' => 'publish',
-        'package' => 'coquibot/my-toolkit',
-        'display_name' => 'My Toolkit',
-        'description' => 'A new toolkit',
-        'tags' => 'api, search',
-    ]);
-
-    expect($result->content)->toContain('coquibot/my-toolkit')
-        ->and($result->content)->toContain('published');
-});
-
 // ── Unknown action ───────────────────────────────────────────────
 
 test('unknown action returns error', function () {
@@ -415,8 +386,8 @@ test('API errors are caught and returned as ToolResult errors', function () {
         new MockResponse('{"error": "Server error"}', ['http_code' => 500]),
     ]);
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -424,9 +395,20 @@ test('API errors are caught and returned as ToolResult errors', function () {
     $dir = sys_get_temp_dir() . '/coqui-toolkits-tool-test-' . uniqid();
     mkdir($dir, 0o755, true);
 
-    $tool = new SpaceToolkitsTool($client, new ToolkitInstaller($client, $dir));
+    $tool = new ModsToolkitsTool($client, new ToolkitInstaller($client, $dir));
 
     $result = $tool->execute(['action' => 'search', 'query' => 'test']);
 
     expect($result->status)->toBe(ToolResultStatus::Error);
+});
+
+test('migrated publish actions are rejected by the toolkits tool', function () {
+    $tool = createToolkitsTool([]);
+
+    foreach (['publish', 'delete'] as $action) {
+        $result = $tool->execute(['action' => $action]);
+
+        expect($result->status)->toBe(ToolResultStatus::Error)
+            ->and($result->content)->toContain('Unknown action');
+    }
 });

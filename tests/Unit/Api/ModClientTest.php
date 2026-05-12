@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use CoquiBot\SpaceManager\Api\SpaceClient;
+use CoquiBot\ModManager\Api\ModClient;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-function createClient(MockHttpClient $http): SpaceClient
+function createClient(MockHttpClient $http): ModClient
 {
-    return new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    return new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => 'cqs_test_token',
         $http,
     );
@@ -292,7 +292,7 @@ test('logToolkitInstall sends POST with client version', function () {
     ]);
 
     $client = createClient($http);
-    $result = $client->logToolkitInstall('coquibot', 'browser', 'coqui-space-manager/0.1.0');
+    $result = $client->logToolkitInstall('coquibot', 'browser', 'coqui-toolkit-mod-manager/0.1.0');
 
     expect($result)->toHaveKey('ok');
 });
@@ -500,8 +500,8 @@ test('anonymous client omits auth header', function () {
         new MockResponse(json_encode(['results' => []])),
     ]);
 
-    $client = new SpaceClient(
-        static fn(): string => 'https://coqui.space/api/v1',
+    $client = new ModClient(
+        static fn(): string => 'https://agentcoqui.com/api/v1',
         static fn(): string => '',
         $http,
     );
@@ -517,10 +517,10 @@ test('url resolver is called for each request', function () {
         new MockResponse(json_encode(['results' => []])),
     ]);
 
-    $client = new SpaceClient(
+    $client = new ModClient(
         static function () use (&$callCount): string {
             $callCount++;
-            return 'https://coqui.space/api/v1';
+            return 'https://agentcoqui.com/api/v1';
         },
         static fn(): string => '',
         $http,
@@ -530,4 +530,174 @@ test('url resolver is called for each request', function () {
     $client->searchSkills('second');
 
     expect($callCount)->toBe(2);
+});
+
+// ── New API Methods ──────────────────────────────────────────────────
+
+test('deleteSkill sends delete request', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode(['success' => true])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->deleteSkill('testuser', 'my-skill');
+
+    expect($result)->toHaveKey('success')
+        ->and($result['success'])->toBeTrue();
+});
+
+test('logSkillInstall sends post request', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode(['logged' => true])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->logSkillInstall('testuser', 'my-skill');
+
+    expect($result)->toHaveKey('logged');
+});
+
+test('deleteToolkit sends delete request', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode(['success' => true])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->deleteToolkit('testuser', 'my-toolkit');
+
+    expect($result)->toHaveKey('success');
+});
+
+test('createReview sends review data', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode(['id' => 'rev1', 'rating' => 5])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->createReview('skill', 'testuser', 'my-skill', 5, 'Great!', 'Works perfectly.');
+
+    expect($result)->toHaveKey('id')
+        ->and($result['rating'])->toBe(5);
+});
+
+test('listCollections returns items', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode([
+            'items' => [['id' => 'c1', 'name' => 'Favorites']],
+        ])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->listCollections();
+
+    expect($result)->toHaveKey('items')
+        ->and($result['items'])->toHaveCount(1);
+});
+
+test('createCollection returns new collection', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode(['id' => 'new1', 'name' => 'Test Collection'])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->createCollection('Test Collection', 'A test', true);
+
+    expect($result)->toHaveKey('id')
+        ->and($result['name'])->toBe('Test Collection');
+});
+
+test('getCollection returns collection with items', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode([
+            'id' => 1,
+            'name' => 'Favorites',
+            'items' => [['entityType' => 'skill', 'name' => 'code-review']],
+        ])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->getCollection(1);
+
+    expect($result)->toHaveKey('items')
+        ->and($result['name'])->toBe('Favorites');
+});
+
+test('healthCheck returns status', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode(['status' => 'ok', 'version' => '0.1.0'])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->healthCheck();
+
+    expect($result)->toHaveKey('status')
+        ->and($result['status'])->toBe('ok');
+});
+
+test('mySkills returns user skills', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode([
+            'items' => [['name' => 'my-skill', 'status' => 'published']],
+        ])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->mySkills();
+
+    expect($result)->toHaveKey('items')
+        ->and($result['items'])->toHaveCount(1);
+});
+
+test('myCollections returns user collections', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode([
+            'items' => [['id' => 'c1', 'name' => 'Favorites']],
+        ])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->myCollections();
+
+    expect($result)->toHaveKey('items');
+});
+
+test('myAnalytics returns analytics data', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode([
+            'totalDownloads' => 500,
+            'totalStars' => 20,
+        ])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->myAnalytics(30);
+
+    expect($result)->toHaveKey('totalDownloads')
+        ->and($result['totalDownloads'])->toBe(500);
+});
+
+test('myNotifications returns notifications', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode([
+            'items' => [['id' => 'n1', 'title' => 'New star', 'isRead' => false]],
+        ])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->myNotifications();
+
+    expect($result)->toHaveKey('items')
+        ->and($result['items'])->toHaveCount(1);
+});
+
+test('patch method works for updates', function () {
+    $http = new MockHttpClient([
+        new MockResponse(json_encode(['id' => 1, 'name' => 'Updated'])),
+    ]);
+
+    $client = createClient($http);
+    $result = $client->updateCollection(1, ['name' => 'Updated', 'description' => 'New desc']);
+
+    expect($result)->toHaveKey('name')
+        ->and($result['name'])->toBe('Updated');
 });
